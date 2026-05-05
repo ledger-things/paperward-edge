@@ -32,6 +32,22 @@ You can run your own Paperward edge by deploying this Worker to your Cloudflare 
 
 Pull requests are not accepted while v0 is being stabilized. Issues, discussions, and feedback are welcome.
 
+## Pinned dependencies
+
+The following core dependencies are pinned to ensure consistent behavior across deployments:
+
+- `hono`: 4.12.17
+- `web-bot-auth`: 0.1.3 (Web Bot Authentication using HTTP Message Signatures)
+- `x402-hono`: 1.2.0 (x402 payment request middleware for Hono)
+- `ulid`: 2.4.0 (ULID generation)
+- `toucan-js`: 4.1.1 (Sentry error tracking for Cloudflare Workers)
+- `@cloudflare/workers-types`: 4.20260101.0
+- `wrangler`: 3.80.0 (Cloudflare Workers CLI)
+- `typescript`: 5.4.0
+- `vitest`: 2.0.0
+
+For IETF draft revisions: The `web-bot-auth` package implements HTTP Message Signatures per RFC 9421. Check the [package repository](https://www.npmjs.com/package/web-bot-auth) for the specific draft revision targeting if integrating with other WBA implementations.
+
 ## Spec
 
 Detailed design: `docs/superpowers/specs/2026-05-05-edge-layer-v0-design.md`.
