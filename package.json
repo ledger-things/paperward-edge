@@ -1,0 +1,35 @@
+{
+  "name": "paperward-edge",
+  "version": "0.0.1",
+  "description": "Paperward edge layer — Cloudflare Worker fronting publisher hostnames; WBA detection + x402 paywall + origin forwarding.",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wrangler dev --env dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "provision-tenant": "tsx bin/provision-tenant.ts"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "ulid": "^2.3.0",
+    "toucan-js": "^4.0.0",
+    "x402-hono": "latest",
+    "web-bot-auth": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.0",
+    "@cloudflare/workers-types": "^4.20260101.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.80.0"
+  }
+}
