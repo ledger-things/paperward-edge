@@ -39,7 +39,7 @@ function parseArgs(): Args {
   const out: Record<string, string> = {};
   for (const arg of process.argv.slice(2)) {
     const m = arg.match(/^--([\w-]+)=(.*)$/);
-    if (!m) {
+    if (!m || m[1] === undefined || m[2] === undefined) {
       console.error(`unrecognized argument: ${arg}`);
       process.exit(2);
     }
@@ -65,10 +65,10 @@ function parseArgs(): Args {
     hostname: out.hostname!,
     origin: out.origin!,
     payout_address: out.payout_address!,
-    tenant_id: out.tenant_id,
-    status,
-    default_action,
-    rules_file: out.rules_file,
+    ...(out.tenant_id !== undefined ? { tenant_id: out.tenant_id } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(default_action !== undefined ? { default_action } : {}),
+    ...(out.rules_file !== undefined ? { rules_file: out.rules_file } : {}),
   };
 }
 

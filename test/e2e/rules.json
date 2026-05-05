@@ -1,0 +1,4 @@
+[
+  { "id": "e2e-charge", "priority": 1, "path_pattern": "/paid/*", "agent_pattern": "signed:test-agent.local", "action": "charge", "price_usdc": "0.001", "enabled": true },
+  { "id": "e2e-allow-human", "priority": 2, "path_pattern": "*", "agent_pattern": "human", "action": "allow", "enabled": true }
+]
