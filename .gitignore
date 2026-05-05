@@ -10,3 +10,4 @@ coverage/
 .env.local
 .vscode/
 .idea/
+worker-configuration.d.ts

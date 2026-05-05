@@ -1,0 +1,121 @@
+name = "paperward-edge"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ─────────────────────────────────────────────────────────────
+# Default (production) values. Concrete IDs are filled in at
+# deploy time via `wrangler kv:namespace create` etc.
+# ─────────────────────────────────────────────────────────────
+
+[vars]
+ENV = "production"
+ADMIN_HOSTNAME = "admin.paperward.com"
+HEALTH_HOSTNAME = "health.paperward.com"
+
+[[kv_namespaces]]
+binding = "KV_DOMAINS"
+id = "REPLACE_ME_PROD_DOMAINS"
+
+[[kv_namespaces]]
+binding = "KV_KEY_CACHE"
+id = "REPLACE_ME_PROD_KEY_CACHE"
+
+[[kv_namespaces]]
+binding = "KV_AUDIT"
+id = "REPLACE_ME_PROD_AUDIT"
+
+[[r2_buckets]]
+binding = "R2_LOGS"
+bucket_name = "paperward-logs-prod"
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "paperward_edge_prod"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiterDO"]
+
+# Q_SETTLE_RETRY queue intentionally NOT declared in v0.
+# (Adding it later, when the producer call site and consumer
+# Worker ship together, per spec §11.1.)
+
+# ─────────────────────────────────────────────────────────────
+# dev environment — `wrangler dev --env dev`
+# ─────────────────────────────────────────────────────────────
+
+[env.dev]
+name = "paperward-edge-dev"
+
+[env.dev.vars]
+ENV = "dev"
+ADMIN_HOSTNAME = "admin.dev.paperward.local"
+HEALTH_HOSTNAME = "health.dev.paperward.local"
+
+[[env.dev.kv_namespaces]]
+binding = "KV_DOMAINS"
+id = "REPLACE_ME_DEV_DOMAINS"
+preview_id = "REPLACE_ME_DEV_DOMAINS_PREVIEW"
+
+[[env.dev.kv_namespaces]]
+binding = "KV_KEY_CACHE"
+id = "REPLACE_ME_DEV_KEY_CACHE"
+preview_id = "REPLACE_ME_DEV_KEY_CACHE_PREVIEW"
+
+[[env.dev.kv_namespaces]]
+binding = "KV_AUDIT"
+id = "REPLACE_ME_DEV_AUDIT"
+preview_id = "REPLACE_ME_DEV_AUDIT_PREVIEW"
+
+[[env.dev.r2_buckets]]
+binding = "R2_LOGS"
+bucket_name = "paperward-logs-dev"
+
+[[env.dev.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "paperward_edge_dev"
+
+[[env.dev.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"
+
+# ─────────────────────────────────────────────────────────────
+# staging environment — `wrangler deploy --env staging`
+# ─────────────────────────────────────────────────────────────
+
+[env.staging]
+name = "paperward-edge-staging"
+
+[env.staging.vars]
+ENV = "staging"
+ADMIN_HOSTNAME = "admin.staging.paperward.com"
+HEALTH_HOSTNAME = "health.staging.paperward.com"
+
+[[env.staging.kv_namespaces]]
+binding = "KV_DOMAINS"
+id = "REPLACE_ME_STAGING_DOMAINS"
+
+[[env.staging.kv_namespaces]]
+binding = "KV_KEY_CACHE"
+id = "REPLACE_ME_STAGING_KEY_CACHE"
+
+[[env.staging.kv_namespaces]]
+binding = "KV_AUDIT"
+id = "REPLACE_ME_STAGING_AUDIT"
+
+[[env.staging.r2_buckets]]
+binding = "R2_LOGS"
+bucket_name = "paperward-logs-staging"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "paperward_edge_staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"

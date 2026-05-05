@@ -1,0 +1,6 @@
+# Copy this file to .dev.vars and fill in real values for local dev.
+# .dev.vars is gitignored.
+
+SENTRY_DSN=
+ADMIN_TOKEN=dev-admin-token-change-me
+COINBASE_FACILITATOR_KEY=
