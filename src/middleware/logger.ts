@@ -52,18 +52,22 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
       latency_ms: Date.now() - start,
     };
 
-    const metrics = new Metrics(c.env.ANALYTICS);
-    metrics.requestRecorded({
-      tenant_id: entry.tenant_id || "unknown",
-      decision: entry.decision,
-      agent_signed: entry.agent_signed,
-      latency_ms: entry.latency_ms,
-    });
-    if (detection) {
-      metrics.detectorMatch({
-        detector_id: detection.detector_id,
-        agent_id_class: classifyAgentId(detection.agent_id),
+    // ANALYTICS may be absent in environments where the binding is not
+    // provisioned (e.g. integration test miniflare without analytics support).
+    if (c.env.ANALYTICS) {
+      const metrics = new Metrics(c.env.ANALYTICS);
+      metrics.requestRecorded({
+        tenant_id: entry.tenant_id || "unknown",
+        decision: entry.decision,
+        agent_signed: entry.agent_signed,
+        latency_ms: entry.latency_ms,
       });
+      if (detection) {
+        metrics.detectorMatch({
+          detector_id: detection.detector_id,
+          agent_id_class: classifyAgentId(detection.agent_id),
+        });
+      }
     }
 
     c.executionCtx.waitUntil(writeLogToR2(c.env.R2_LOGS, entry));

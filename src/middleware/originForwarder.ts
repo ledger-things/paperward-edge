@@ -11,13 +11,18 @@ const STRIP_REQUEST_HEADERS = new Set([
   "x-payment", "signature", "signature-input", "signature-agent",
 ]);
 
-export function buildOriginForwarder(fetchImpl: typeof fetch = fetch): Handler<{ Bindings: Env; Variables: Vars }> {
+export function buildOriginForwarder(fetchImpl?: typeof fetch): Handler<{ Bindings: Env; Variables: Vars }> {
   return async (c) => {
     const tenant = c.var.tenant;
     if (!tenant) {
       // Should never reach here without a tenant; tenantResolver ensures.
       return c.text("internal: no tenant", 500);
     }
+
+    // Use the injected fetchImpl (for unit tests) or globalThis.fetch at call
+    // time (for integration tests, where vi.spyOn can replace globalThis.fetch
+    // between test setup and the actual request).
+    const doFetch = fetchImpl ?? globalThis.fetch;
 
     const inboundUrl = new URL(c.req.url);
     const originUrl = new URL(tenant.origin);
@@ -47,7 +52,7 @@ export function buildOriginForwarder(fetchImpl: typeof fetch = fetch): Handler<{
 
     let resp: Response;
     try {
-      resp = await fetchImpl(forwardedUrl, init);
+      resp = await doFetch(forwardedUrl, init);
     } catch (err) {
       console.error(JSON.stringify({ at: "originForwarder", event: "fetch_threw", err: String(err) }));
       c.set("origin_status", null);

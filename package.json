@@ -10,8 +10,8 @@
   },
   "scripts": {
     "dev": "wrangler dev --env dev",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --workspace vitest.workspace.ts",
+    "test:watch": "vitest --workspace vitest.workspace.ts",
     "test:e2e": "tsx test/e2e/run.ts",
     "typecheck": "wrangler types && tsc --noEmit",
     "deploy:staging": "wrangler deploy --env staging",
