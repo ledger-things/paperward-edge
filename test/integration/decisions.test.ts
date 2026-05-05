@@ -45,7 +45,7 @@ async function agentRequest(
   url: string,
   extraHeaders?: Record<string, string>,
 ): Promise<Request> {
-  return signRequest({ url, additionalHeaders: extraHeaders });
+  return signRequest(extraHeaders ? { url, additionalHeaders: extraHeaders } : { url });
 }
 
 /** Standard fetch spy that handles facilitator + WBA directory + origin calls. */
