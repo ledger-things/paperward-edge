@@ -10,15 +10,8 @@ export default defineConfig({
   },
   test: {
     projects: [
-      {
-        // Unit tests: plain Node, fast, no Workers runtime
-        extends: false,
-        test: {
-          name: "unit",
-          include: ["test/unit/**/*.test.ts"],
-          environment: "node",
-        },
-      },
+      // Unit tests: plain Node, fast, no Workers runtime — config in vitest.unit.config.ts
+      "./vitest.unit.config.ts",
       defineWorkersProject({
         // Integration tests: full Workers runtime via Miniflare
         test: {

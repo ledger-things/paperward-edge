@@ -20,16 +20,17 @@
   },
   "dependencies": {
     "hono": "^4.6.0",
-    "ulid": "^2.3.0",
     "toucan-js": "^4.0.0",
-    "x402-hono": "latest",
-    "web-bot-auth": "latest"
+    "ulid": "^2.3.0",
+    "web-bot-auth": "latest",
+    "x402-hono": "latest"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.0",
     "@cloudflare/workers-types": "^4.20260101.0",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
+    "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^2.0.0",
     "wrangler": "^3.80.0"
   }
