@@ -7,9 +7,10 @@
 
 import type { TenantConfig } from "@/config/types";
 import type { DetectionResult } from "@/detectors/types";
-import type { DecisionState } from "@/types";
+import type { DecisionState, Env, Vars } from "@/types";
 import { matchPath, matchAgent } from "@/utils/patterns";
 import type { Decision } from "@/logging/types";
+import type { MiddlewareHandler } from "hono";
 
 export function resolvePricing(
   tenant: TenantConfig,
@@ -64,3 +65,15 @@ function initialChargeDecisionForRule(
   // settle success. That matches the "happy path is a final upgrade" model.
   return status === "log_only" ? "would_charge_no_payment" : "charge_no_payment";
 }
+
+export const pricingResolverMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = async (c, next) => {
+  const tenant = c.var.tenant;
+  if (!tenant || tenant.status === "paused_by_publisher" || tenant.status === "suspended_by_paperward") {
+    await next();
+    return;
+  }
+  const path = new URL(c.req.url).pathname;
+  const decision = resolvePricing(tenant, c.var.detection, path);
+  c.set("decision_state", decision);
+  await next();
+};
