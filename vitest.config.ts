@@ -1,5 +1,4 @@
 import { defineConfig } from "vitest/config";
-import { defineWorkersProject } from "@cloudflare/vitest-pool-workers/config";
 import path from "node:path";
 
 export default defineConfig({
@@ -9,33 +8,16 @@ export default defineConfig({
     },
   },
   test: {
+    // Exclude integration tests from the root Vite context — they run in the
+    // Workers miniflare pool via vitest.integration.config.ts. The root config's
+    // Vite instance does not have the @cloudflare/vitest-pool-workers plugin, so
+    // cloudflare:test imports would fail if integration tests were collected here.
+    exclude: ["**/node_modules/**", "test/integration/**"],
     projects: [
       // Unit tests: plain Node, fast, no Workers runtime — config in vitest.unit.config.ts
       "./vitest.unit.config.ts",
-      defineWorkersProject({
-        // Integration tests: full Workers runtime via Miniflare
-        test: {
-          name: "integration",
-          include: ["test/integration/**/*.test.ts"],
-          poolOptions: {
-            workers: {
-              wrangler: { configPath: "./wrangler.toml" },
-              miniflare: {
-                kvNamespaces: ["KV_DOMAINS", "KV_KEY_CACHE", "KV_AUDIT"],
-                r2Buckets: ["R2_LOGS"],
-                analyticsEngineDatasets: { ANALYTICS: { dataset: "paperward_edge_test" } },
-                bindings: {
-                  ENV: "test",
-                  ADMIN_HOSTNAME: "admin.test.paperward.local",
-                  HEALTH_HOSTNAME: "health.test.paperward.local",
-                  ADMIN_TOKEN: "test-admin-token",
-                  SENTRY_DSN: "",
-                },
-              },
-            },
-          },
-        },
-      }),
+      // Integration tests: full Workers runtime via Miniflare — config in vitest.integration.config.ts
+      "./vitest.integration.config.ts",
     ],
   },
 });

@@ -75,5 +75,12 @@ export const pricingResolverMiddleware: MiddlewareHandler<{ Bindings: Env; Varia
   const path = new URL(c.req.url).pathname;
   const decision = resolvePricing(tenant, c.var.detection, path);
   c.set("decision_state", decision);
+
+  // Enforce block decisions immediately — do not forward to origin.
+  // (log_only mode produces would_block which still forwards; block is active enforcement.)
+  if (decision.decision === "block") {
+    return c.text("Forbidden", 403);
+  }
+
   await next();
 };
