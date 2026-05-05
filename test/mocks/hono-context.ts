@@ -15,6 +15,7 @@ export async function runMiddleware(
   initialVars: Partial<Vars>,
 ): Promise<{ response: Response; vars: Partial<Vars> }> {
   const app = new Hono<{ Bindings: Env; Variables: Vars }>();
+  let capturedVars: Partial<Vars> = {};
   // Pre-populate vars
   app.use("*", async (c, next) => {
     for (const [k, v] of Object.entries(initialVars)) {
@@ -22,10 +23,14 @@ export async function runMiddleware(
     }
     await next();
   });
-  app.use("*", middleware);
-  let capturedVars: Partial<Vars> = {};
-  app.all("*", (c) => {
+  // Wrap the middleware under test to capture vars after it executes,
+  // regardless of whether it returned early or called next().
+  app.use("*", async (c, next) => {
+    const result = await middleware(c, next);
     capturedVars = { ...c.var };
+    if (result instanceof Response) return result;
+  });
+  app.all("*", (c) => {
     return c.text("default-handler");
   });
   const response = await app.fetch(request, env as Env);
