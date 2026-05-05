@@ -12,6 +12,7 @@
     "dev": "wrangler dev --env dev",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "tsx test/e2e/run.ts",
     "typecheck": "wrangler types && tsc --noEmit",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env production",
