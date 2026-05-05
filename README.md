@@ -48,6 +48,24 @@ The following core dependencies are pinned to ensure consistent behavior across 
 
 For IETF draft revisions: The `web-bot-auth` package implements HTTP Message Signatures per RFC 9421. Check the [package repository](https://www.npmjs.com/package/web-bot-auth) for the specific draft revision targeting if integrating with other WBA implementations.
 
+## Provisioning a tenant
+
+Once the Worker is deployed and you've created the necessary secrets, provision a new tenant with:
+
+```bash
+ADMIN_BASE_URL=https://admin.staging.paperward.com \
+ADMIN_TOKEN=... \
+CF_API_TOKEN=... \
+CF_ZONE_ID=... \
+tsx bin/provision-tenant.ts \
+  --hostname=blog.example.com \
+  --origin=https://internal-origin.example.com \
+  --payout-address=0x... \
+  [--rules-file=rules.json]
+```
+
+The script writes the tenant config via the admin endpoint, registers the hostname with Cloudflare's Custom Hostnames API, and prints DCV instructions for the publisher.
+
 ## Spec
 
 Detailed design: `docs/superpowers/specs/2026-05-05-edge-layer-v0-design.md`.
