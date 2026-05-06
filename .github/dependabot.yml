@@ -16,6 +16,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/*"
         update-types: ["version-update:semver-major"]
+      # wrangler 4 pulls a transitive lightningcss whose platform-specific
+      # binary packages break `npm ci` on Linux CI. Re-evaluate when fixed.
+      - dependency-name: "wrangler"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development

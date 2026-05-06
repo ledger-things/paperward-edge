@@ -226,7 +226,7 @@ Core dependencies are pinned to keep behavior consistent across deployments and 
 | `toucan-js` | 4.1.1 | Sentry SDK for Workers |
 | `viem` | ≥ 2.48 | EIP-712 signing for the Sepolia e2e suite |
 | `@cloudflare/workers-types` | 4.x | Workers ambient types |
-| `wrangler` | 4.x | Workers CLI |
+| `wrangler` | 3.x | Workers CLI — pinned at 3.x; wrangler 4's transitive `lightningcss` platform-binary deps break `npm ci` on Linux runners. Re-evaluate once Cloudflare resolves [the issue upstream](https://github.com/cloudflare/workers-sdk/issues). |
 | `typescript` | 6.x | |
 | `vitest` | 2.x | Pinned at 2.x until [`@cloudflare/vitest-pool-workers`](https://www.npmjs.com/package/@cloudflare/vitest-pool-workers) ships vitest-3+ support |
 | `@biomejs/biome` | 2.4.14 | Lint + format |
