@@ -4,7 +4,7 @@ import { writeLogToR2, logKey } from "@/logging/r2-writer";
 import type { LogEntry } from "@/logging/types";
 
 const SAMPLE: LogEntry = {
-  id: "01H8XGJWBK1234ABCDEF",  // ULID; first 4 chars = "01H8"
+  id: "01H8XGJWBK1234ABCDEF", // ULID; first 4 chars = "01H8"
   ts: "2026-05-05T12:00:00Z",
   tenant_id: "tenant-uuid-1",
   hostname: "blog.example.com",

@@ -13,8 +13,5 @@ export type DetectorRegistryDeps = {
 };
 
 export function buildDetectorRegistry(deps: DetectorRegistryDeps): Detector[] {
-  return [
-    new WebBotAuthDetector({ keyCache: deps.wbaKeyCache }),
-    new HumanDetector(),
-  ];
+  return [new WebBotAuthDetector({ keyCache: deps.wbaKeyCache }), new HumanDetector()];
 }

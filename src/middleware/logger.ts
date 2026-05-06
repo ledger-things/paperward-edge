@@ -81,7 +81,7 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
       writeLogToR2(c.env.R2_LOGS, entry).catch((err) => {
         console.error(JSON.stringify({ at: "logger", event: "r2_write_failed", err: String(err) }));
         capturedSentry?.captureException(err);
-      })
+      }),
     );
   };
 }

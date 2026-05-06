@@ -9,7 +9,11 @@ export function buildDetectorPipelineMiddleware(
 ): MiddlewareHandler<{ Bindings: Env; Variables: Vars }> {
   return async (c, next) => {
     const tenant = c.var.tenant;
-    if (!tenant || tenant.status === "paused_by_publisher" || tenant.status === "suspended_by_paperward") {
+    if (
+      !tenant ||
+      tenant.status === "paused_by_publisher" ||
+      tenant.status === "suspended_by_paperward"
+    ) {
       c.set("detection", null);
       await next();
       return;
@@ -20,7 +24,10 @@ export function buildDetectorPipelineMiddleware(
     for (const d of detectors) {
       try {
         const r = await d.detect(c.req.raw);
-        if (r !== null) { detection = r; break; }
+        if (r !== null) {
+          detection = r;
+          break;
+        }
       } catch (err) {
         console.error(JSON.stringify({ at: "detectorPipeline", detector: d.id, err: String(err) }));
         // continue to next detector

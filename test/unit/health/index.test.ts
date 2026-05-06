@@ -13,7 +13,7 @@ describe("health endpoints", () => {
     const app = buildHealthApp("abc123");
     const r = await app.fetch(new Request("https://x/healthz"), env);
     expect(r.status).toBe(200);
-    const body = await r.json() as any;
+    const body = (await r.json()) as any;
     expect(body.build_sha).toBe("abc123");
     expect(body.env).toBe("staging");
     expect(body.kv_ok).toBe(true);

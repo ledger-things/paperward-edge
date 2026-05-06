@@ -81,7 +81,7 @@ export class CoinbaseX402Facilitator implements Facilitator {
 
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (this.deps.apiKey !== undefined) {
-      headers["authorization"] = `Bearer ${this.deps.apiKey}`;
+      headers.authorization = `Bearer ${this.deps.apiKey}`;
     }
 
     const r = await this.fetchImpl(`${FACILITATOR_BASE}/verify`, {
@@ -108,26 +108,24 @@ export class CoinbaseX402Facilitator implements Facilitator {
       throw new Error(`facilitator_verify_http_${r.status}`);
     }
 
-    const body = await r.json() as Record<string, unknown>;
+    const body = (await r.json()) as Record<string, unknown>;
 
-    if (body["isValid"] === true) {
+    if (body.isValid === true) {
       const result: VerifyResult = {
         valid: true,
         // settlement_handle carries the original payment header; the settle
         // endpoint needs it to look up the on-chain transaction to broadcast.
         settlement_handle: payment,
       };
-      if (typeof body["payer"] === "string") {
-        result.payer = body["payer"];
+      if (typeof body.payer === "string") {
+        result.payer = body.payer;
       }
       return result;
     }
 
     return {
       valid: false,
-      reason: typeof body["invalidReason"] === "string"
-        ? body["invalidReason"]
-        : "verify_rejected",
+      reason: typeof body.invalidReason === "string" ? body.invalidReason : "verify_rejected",
     };
   }
 
@@ -138,7 +136,7 @@ export class CoinbaseX402Facilitator implements Facilitator {
 
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (this.deps.apiKey !== undefined) {
-      headers["authorization"] = `Bearer ${this.deps.apiKey}`;
+      headers.authorization = `Bearer ${this.deps.apiKey}`;
     }
 
     const r = await this.fetchImpl(`${FACILITATOR_BASE}/settle`, {
@@ -154,21 +152,19 @@ export class CoinbaseX402Facilitator implements Facilitator {
       throw new Error(`facilitator_settle_http_${r.status}`);
     }
 
-    const body = await r.json() as Record<string, unknown>;
+    const body = (await r.json()) as Record<string, unknown>;
 
-    if (body["success"] === true) {
+    if (body.success === true) {
       const result: SettleResult = { success: true };
-      if (typeof body["transaction"] === "string") {
-        result.tx_reference = body["transaction"];
+      if (typeof body.transaction === "string") {
+        result.tx_reference = body.transaction;
       }
       return result;
     }
 
     return {
       success: false,
-      reason: typeof body["errorReason"] === "string"
-        ? body["errorReason"]
-        : "settle_rejected",
+      reason: typeof body.errorReason === "string" ? body.errorReason : "settle_rejected",
     };
   }
 }

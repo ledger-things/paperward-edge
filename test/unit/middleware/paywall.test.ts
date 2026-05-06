@@ -3,13 +3,26 @@ import { describe, it, expect, vi } from "vitest";
 import { buildPaywallMiddleware } from "@/middleware/paywall";
 import { runMiddleware } from "../../mocks/hono-context";
 import type { TenantConfig } from "@/config/types";
-import type { Facilitator, VerifyResult, SettleResult, PaymentRequirements } from "@/facilitators/types";
+import type {
+  Facilitator,
+  VerifyResult,
+  SettleResult,
+  PaymentRequirements,
+} from "@/facilitators/types";
 
 const t: TenantConfig = {
-  schema_version: 1, tenant_id: "t1", hostname: "blog.example.com",
-  origin: "https://o", status: "active", default_action: "allow",
-  facilitator_id: "coinbase-x402-base", payout_address: "0xabc", pricing_rules: [],
-  config_version: 1, created_at: "x", updated_at: "x",
+  schema_version: 1,
+  tenant_id: "t1",
+  hostname: "blog.example.com",
+  origin: "https://o",
+  status: "active",
+  default_action: "allow",
+  facilitator_id: "coinbase-x402-base",
+  payout_address: "0xabc",
+  pricing_rules: [],
+  config_version: 1,
+  created_at: "x",
+  updated_at: "x",
 };
 
 function fac(opts: {
@@ -21,9 +34,13 @@ function fac(opts: {
   return {
     id: "coinbase-x402-base",
     build402: (req: PaymentRequirements, error?: string) =>
-      new Response(JSON.stringify({ accepts: [{ resource: req.resource, payTo: req.recipient, error }] }), {
-        status: 402, headers: { "WWW-Authenticate": "x402", "content-type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ accepts: [{ resource: req.resource, payTo: req.recipient, error }] }),
+        {
+          status: 402,
+          headers: { "WWW-Authenticate": "x402", "content-type": "application/json" },
+        },
+      ),
     verify: vi.fn(async () => {
       if (opts.verifyThrows) throw opts.verifyThrows;
       if (typeof opts.verify === "function") return opts.verify();
@@ -49,10 +66,15 @@ describe("paywall (active mode)", () => {
   it("returns 402 when no X-PAYMENT header is present", async () => {
     const f = fac({});
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { response, vars } = await runMiddleware(mw, new Request("https://blog.example.com/x"), {}, {
-      tenant: t,
-      decision_state: initialChargeState,
-    });
+    const { response, vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x"),
+      {},
+      {
+        tenant: t,
+        decision_state: initialChargeState,
+      },
+    );
     expect(response.status).toBe(402);
     expect(vars.decision_state?.decision).toBe("charge_no_payment");
   });
@@ -60,11 +82,15 @@ describe("paywall (active mode)", () => {
   it("returns 402 with verify_failed when verify rejects", async () => {
     const f = fac({ verify: { valid: false, reason: "invalid_amount" } });
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { response, vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: t,
-      decision_state: initialChargeState,
-    });
+    const { response, vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: t,
+        decision_state: initialChargeState,
+      },
+    );
     expect(response.status).toBe(402);
     expect(vars.decision_state?.decision).toBe("charge_verify_failed");
     expect(vars.decision_state?.decision_reason).toBe("invalid_amount");
@@ -73,11 +99,15 @@ describe("paywall (active mode)", () => {
   it("returns 503 when verify throws (facilitator unreachable)", async () => {
     const f = fac({ verifyThrows: new Error("net err") });
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { response, vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: t,
-      decision_state: initialChargeState,
-    });
+    const { response, vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: t,
+        decision_state: initialChargeState,
+      },
+    );
     expect(response.status).toBe(503);
     expect(vars.decision_state?.decision).toBe("charge_verify_failed");
     expect(vars.decision_state?.decision_reason).toBe("facilitator_unavailable");
@@ -85,14 +115,21 @@ describe("paywall (active mode)", () => {
 
   it("calls settle and sets charge_paid on success after origin 2xx", async () => {
     // The originForwarder is faked: the test app's default handler returns 200.
-    const f = fac({ verify: { valid: true, settlement_handle: "h" }, settle: { success: true, tx_reference: "0xtx" } });
-    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { response, vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: t,
-      decision_state: initialChargeState,
-      origin_status: 200,  // simulate originForwarder having set this
+    const f = fac({
+      verify: { valid: true, settlement_handle: "h" },
+      settle: { success: true, tx_reference: "0xtx" },
     });
+    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
+    const { response, vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: t,
+        decision_state: initialChargeState,
+        origin_status: 200, // simulate originForwarder having set this
+      },
+    );
     expect(response.status).toBe(200);
     expect(vars.decision_state?.decision).toBe("charge_paid");
     expect(vars.decision_state?.paid).toBe(true);
@@ -101,55 +138,91 @@ describe("paywall (active mode)", () => {
   });
 
   it("sets charge_unsettled when settle returns failure after origin 2xx", async () => {
-    const f = fac({ verify: { valid: true, settlement_handle: "h" }, settle: { success: false, reason: "settle_failed" } });
-    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: t,
-      decision_state: initialChargeState,
-      origin_status: 200,
+    const f = fac({
+      verify: { valid: true, settlement_handle: "h" },
+      settle: { success: false, reason: "settle_failed" },
     });
+    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
+    const { vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: t,
+        decision_state: initialChargeState,
+        origin_status: 200,
+      },
+    );
     expect(vars.decision_state?.decision).toBe("charge_unsettled");
     expect(vars.decision_state?.paid).toBe(false);
   });
 
   it("does NOT call settle when origin returned non-2xx (charge_origin_failed left as-is)", async () => {
-    const f = fac({ verify: { valid: true, settlement_handle: "h" }, settle: { success: true, tx_reference: "0xtx" } });
-    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: t,
-      decision_state: { ...initialChargeState, decision: "charge_origin_failed", decision_reason: "origin_500" },
-      origin_status: 500,
+    const f = fac({
+      verify: { valid: true, settlement_handle: "h" },
+      settle: { success: true, tx_reference: "0xtx" },
     });
+    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
+    await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: t,
+        decision_state: {
+          ...initialChargeState,
+          decision: "charge_origin_failed",
+          decision_reason: "origin_500",
+        },
+        origin_status: 500,
+      },
+    );
     expect((f.settle as any).mock.calls.length).toBe(0);
   });
 });
 
 describe("paywall (log_only mode)", () => {
   const tlog = { ...t, status: "log_only" as const };
-  const initial = { decision: "would_charge_no_payment" as const, decision_reason: null, rule_id: "r1", price_usdc: "0.01", paid: false, payment_tx: null };
+  const initial = {
+    decision: "would_charge_no_payment" as const,
+    decision_reason: null,
+    rule_id: "r1",
+    price_usdc: "0.01",
+    paid: false,
+    payment_tx: null,
+  };
 
   it("never returns 402, even with no X-PAYMENT", async () => {
     const f = fac({});
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { response, vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x"), {}, {
-      tenant: tlog,
-      decision_state: initial,
-    });
+    const { response, vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x"),
+      {},
+      {
+        tenant: tlog,
+        decision_state: initial,
+      },
+    );
     expect(response.status).toBe(200);
     expect(vars.decision_state?.decision).toBe("would_charge_no_payment");
   });
 
   it("calls verify read-only and records would_charge_paid on valid", async () => {
-    const f = fac({ verify: { valid: true, settlement_handle: "h" }, settle: { success: true, tx_reference: "0xtx" } });
-    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: tlog,
-      decision_state: initial,
+    const f = fac({
+      verify: { valid: true, settlement_handle: "h" },
+      settle: { success: true, tx_reference: "0xtx" },
     });
+    const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
+    const { vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: tlog,
+        decision_state: initial,
+      },
+    );
     expect(vars.decision_state?.decision).toBe("would_charge_paid");
     expect((f.settle as any).mock.calls.length).toBe(0); // never settle in log_only
   });
@@ -157,11 +230,15 @@ describe("paywall (log_only mode)", () => {
   it("records would_charge_verify_failed on invalid verify", async () => {
     const f = fac({ verify: { valid: false, reason: "expired" } });
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
-    const { vars } = await runMiddleware(mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }), {}, {
-      tenant: tlog,
-      decision_state: initial,
-    });
+    const { vars } = await runMiddleware(
+      mw,
+      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      {},
+      {
+        tenant: tlog,
+        decision_state: initial,
+      },
+    );
     expect(vars.decision_state?.decision).toBe("would_charge_verify_failed");
     expect(vars.decision_state?.decision_reason).toBe("expired");
   });

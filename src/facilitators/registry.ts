@@ -10,9 +10,10 @@ export type FacilitatorRegistryDeps = {
 
 export function buildFacilitatorRegistry(deps: FacilitatorRegistryDeps): Map<string, Facilitator> {
   const m = new Map<string, Facilitator>();
-  const coinbaseDeps = deps.coinbaseApiKey !== undefined
-    ? { network: deps.network, apiKey: deps.coinbaseApiKey }
-    : { network: deps.network };
+  const coinbaseDeps =
+    deps.coinbaseApiKey !== undefined
+      ? { network: deps.network, apiKey: deps.coinbaseApiKey }
+      : { network: deps.network };
   m.set("coinbase-x402-base", new CoinbaseX402Facilitator(coinbaseDeps));
   return m;
 }

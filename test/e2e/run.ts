@@ -13,7 +13,10 @@
 import { signRequest } from "../fixtures/wba/sign";
 
 const HOST = process.env.E2E_HOSTNAME;
-if (!HOST) { console.error("E2E_HOSTNAME required"); process.exit(2); }
+if (!HOST) {
+  console.error("E2E_HOSTNAME required");
+  process.exit(2);
+}
 
 let failures = 0;
 
@@ -40,8 +43,8 @@ await expect("signed request without payment returns 402 with x402 headers", asy
   if (r.status !== 402) throw new Error(`expected 402, got ${r.status}`);
   const auth = r.headers.get("WWW-Authenticate") ?? "";
   if (!/x402/i.test(auth)) throw new Error(`expected WWW-Authenticate: x402, got ${auth}`);
-  const body = await r.json() as any;
-  if (!body.accepts || !body.accepts[0]?.maxAmountRequired) {
+  const body = (await r.json()) as any;
+  if (!body.accepts?.[0]?.maxAmountRequired) {
     throw new Error(`expected accepts[0].maxAmountRequired in body`);
   }
 });
@@ -72,7 +75,10 @@ await expect("signed request with wrong amount returns 402 charge_verify_failed"
   const reqs = ((await probe.json()) as any).accepts[0];
   const { makeSepoliaPayment } = await import("./sepolia-payment");
   // Pay 1 wei — way too low
-  const xPayment = await makeSepoliaPayment({ ...reqs, maxAmountRequired: "0.000000001" }, process.env.E2E_SEPOLIA_PRIVATE_KEY!);
+  const xPayment = await makeSepoliaPayment(
+    { ...reqs, maxAmountRequired: "0.000000001" },
+    process.env.E2E_SEPOLIA_PRIVATE_KEY!,
+  );
   const signed = await signRequest({
     url: `https://${HOST}/paid/article-1`,
     additionalHeaders: { "x-payment": xPayment },

@@ -26,23 +26,22 @@ describe("worker entry", () => {
   it("routes admin hostname to admin sub-app (401 for unauth admin call)", async () => {
     const r = await worker.fetch(
       new Request("https://admin.test/__admin/tenants/x"),
-      makeEnv(), ctx as any,
+      makeEnv(),
+      ctx as any,
     );
     expect(r.status).toBe(401);
   });
 
   it("routes health hostname to health sub-app", async () => {
-    const r = await worker.fetch(
-      new Request("https://health.test/version"),
-      makeEnv(), ctx as any,
-    );
+    const r = await worker.fetch(new Request("https://health.test/version"), makeEnv(), ctx as any);
     expect(r.status).toBe(200);
   });
 
   it("routes everything else to tenant pipeline (503 for unknown tenant)", async () => {
     const r = await worker.fetch(
       new Request("https://random.example.com/foo"),
-      makeEnv(), ctx as any,
+      makeEnv(),
+      ctx as any,
     );
     expect(r.status).toBe(503);
   });

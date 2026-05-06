@@ -9,10 +9,15 @@ import type { Env, Vars } from "@/types";
 import { Metrics } from "@/metrics/analytics-engine";
 
 const STRIP_REQUEST_HEADERS = new Set([
-  "x-payment", "signature", "signature-input", "signature-agent",
+  "x-payment",
+  "signature",
+  "signature-input",
+  "signature-agent",
 ]);
 
-export function buildOriginForwarder(fetchImpl?: typeof fetch): Handler<{ Bindings: Env; Variables: Vars }> {
+export function buildOriginForwarder(
+  fetchImpl?: typeof fetch,
+): Handler<{ Bindings: Env; Variables: Vars }> {
   return async (c) => {
     const tenant = c.var.tenant;
     if (!tenant) {
@@ -60,12 +65,18 @@ export function buildOriginForwarder(fetchImpl?: typeof fetch): Handler<{ Bindin
       resp = await doFetch(forwardedUrl, init);
       metrics?.originLatency({ tenant_id, latency_ms: Date.now() - originStart });
     } catch (err) {
-      console.error(JSON.stringify({ at: "originForwarder", event: "fetch_threw", err: String(err) }));
+      console.error(
+        JSON.stringify({ at: "originForwarder", event: "fetch_threw", err: String(err) }),
+      );
       c.var.sentry?.captureException(err);
       c.set("origin_status", null);
       const ds = c.var.decision_state;
       if (ds.decision === "charge_no_payment") {
-        c.set("decision_state", { ...ds, decision: "charge_origin_failed", decision_reason: "origin_throw" });
+        c.set("decision_state", {
+          ...ds,
+          decision: "charge_origin_failed",
+          decision_reason: "origin_throw",
+        });
       }
       return c.text("Bad Gateway", 502);
     }
@@ -75,7 +86,11 @@ export function buildOriginForwarder(fetchImpl?: typeof fetch): Handler<{ Bindin
     if (resp.status >= 400) {
       const ds = c.var.decision_state;
       if (ds.decision === "charge_no_payment") {
-        c.set("decision_state", { ...ds, decision: "charge_origin_failed", decision_reason: `origin_${resp.status}` });
+        c.set("decision_state", {
+          ...ds,
+          decision: "charge_origin_failed",
+          decision_reason: `origin_${resp.status}`,
+        });
       }
     }
 

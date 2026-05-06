@@ -52,7 +52,10 @@ function parseArgs(): Args {
     }
   }
   const status = out.status as Args["status"] | undefined;
-  if (status && !["active", "log_only", "paused_by_publisher", "suspended_by_paperward"].includes(status)) {
+  if (
+    status &&
+    !["active", "log_only", "paused_by_publisher", "suspended_by_paperward"].includes(status)
+  ) {
     console.error(`invalid --status: ${status}`);
     process.exit(2);
   }
@@ -108,7 +111,11 @@ async function postAdminTenant(args: Args): Promise<{ tenant_id: string }> {
   return { tenant_id };
 }
 
-async function registerCustomHostname(hostname: string): Promise<{ ssl_validation: { type: string; status: string; txt_name?: string; txt_value?: string } }> {
+async function registerCustomHostname(
+  hostname: string,
+): Promise<{
+  ssl_validation: { type: string; status: string; txt_name?: string; txt_value?: string };
+}> {
   const cfToken = requireEnv("CF_API_TOKEN");
   const zoneId = requireEnv("CF_ZONE_ID");
   const r = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/custom_hostnames`, {
@@ -123,7 +130,7 @@ async function registerCustomHostname(hostname: string): Promise<{ ssl_validatio
     console.error(`CF custom hostnames POST failed: ${r.status} ${await r.text()}`);
     process.exit(1);
   }
-  const body = await r.json() as any;
+  const body = (await r.json()) as any;
   return body.result;
 }
 
@@ -155,11 +162,13 @@ async function main() {
   console.log(``);
   console.log(`Check status:`);
   console.log(`   curl -H "Authorization: Bearer $CF_API_TOKEN" \\`);
-  console.log(`     https://api.cloudflare.com/client/v4/zones/${process.env.CF_ZONE_ID}/custom_hostnames`);
+  console.log(
+    `     https://api.cloudflare.com/client/v4/zones/${process.env.CF_ZONE_ID}/custom_hostnames`,
+  );
   console.log("──────────────────────────────────────────────");
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

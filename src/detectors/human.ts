@@ -9,7 +9,8 @@
 import type { Detector, DetectionResult } from "@/detectors/types";
 
 const BROWSER_UA_PATTERN = /\b(Mozilla|AppleWebKit|Chrome|Safari|Edge|Firefox)\b/i;
-const KNOWN_BOT_PATTERN = /\b(GPTBot|ClaudeBot|PerplexityBot|Bytespider|CCBot|Googlebot|Bingbot|Applebot)\b/i;
+const KNOWN_BOT_PATTERN =
+  /\b(GPTBot|ClaudeBot|PerplexityBot|Bytespider|CCBot|Googlebot|Bingbot|Applebot)\b/i;
 
 export class HumanDetector implements Detector {
   readonly id = "human";

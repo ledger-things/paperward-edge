@@ -1,10 +1,13 @@
 // src/admin/auth.ts
 import type { MiddlewareHandler } from "hono";
 
-export const adminAuth: MiddlewareHandler<{ Bindings: { ADMIN_TOKEN: string } }> = async (c, next) => {
+export const adminAuth: MiddlewareHandler<{ Bindings: { ADMIN_TOKEN: string } }> = async (
+  c,
+  next,
+) => {
   const auth = c.req.header("authorization") ?? "";
   const m = auth.match(/^Bearer (.+)$/);
-  if (!m || !m[1]) return c.text("unauthorized", 401);
+  if (!m?.[1]) return c.text("unauthorized", 401);
   if (!constantTimeEqual(m[1], c.env.ADMIN_TOKEN)) return c.text("unauthorized", 401);
   await next();
 };

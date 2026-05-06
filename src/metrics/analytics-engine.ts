@@ -7,7 +7,12 @@
 export class Metrics {
   constructor(private readonly ds: AnalyticsEngineDataset) {}
 
-  requestRecorded(args: { tenant_id: string; decision: string; agent_signed: boolean; latency_ms: number }): void {
+  requestRecorded(args: {
+    tenant_id: string;
+    decision: string;
+    agent_signed: boolean;
+    latency_ms: number;
+  }): void {
     this.ds.writeDataPoint({
       indexes: [args.tenant_id],
       blobs: ["requests_total", args.decision, String(args.agent_signed)],

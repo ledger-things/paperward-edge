@@ -16,7 +16,7 @@ export function logKey(entry: LogEntry): string {
 }
 
 export async function writeLogToR2(r2: R2Bucket, entry: LogEntry): Promise<boolean> {
-  const body = JSON.stringify(entry) + "\n";
+  const body = `${JSON.stringify(entry)}\n`;
   try {
     await r2.put(logKey(entry), body, {
       httpMetadata: { contentType: "application/x-ndjson" },

@@ -93,7 +93,7 @@ export class WebBotAuthDetector implements Detector {
     // the ACTUAL request URL, so a tampered authority causes a signature mismatch.
     try {
       await wbaVerify(req, async (data, signature, params) => {
-        const keyEntry = dirResult.directory.keys.find(k => k.kid === params.keyid);
+        const keyEntry = dirResult.directory.keys.find((k) => k.kid === params.keyid);
         if (!keyEntry) {
           throw new Error(`key not found in directory: ${params.keyid}`);
         }
@@ -110,7 +110,7 @@ export class WebBotAuthDetector implements Detector {
     // we can apply our own stricter window policy independent of the library's
     // expires-based expiry.
     const createdMatch = sigInput.match(/created=(\d+)/);
-    if (!createdMatch || !createdMatch[1]) return null;
+    if (!createdMatch?.[1]) return null;
     const createdSec = Number(createdMatch[1]);
     const nowSec = Math.floor(this.now() / 1000);
     if (Math.abs(nowSec - createdSec) > TIMESTAMP_WINDOW_S) return null;
@@ -131,7 +131,9 @@ export class WebBotAuthDetector implements Detector {
     // KV cache read (Cloudflare edge-cache TTL = NEGATIVE_TTL_S so short-lived
     // negatives are evicted quickly; the in-process expires_ms check handles
     // the positive-TTL boundary independently of KV's own eviction).
-    const cached = await this.deps.keyCache.get(key, { cacheTtl: NEGATIVE_TTL_S } as KVNamespaceGetOptions<"text">);
+    const cached = await this.deps.keyCache.get(key, {
+      cacheTtl: NEGATIVE_TTL_S,
+    } as KVNamespaceGetOptions<"text">);
     if (cached) {
       const parsed = JSON.parse(cached) as CacheValue;
       if (parsed.expires_ms > this.now()) return parsed;

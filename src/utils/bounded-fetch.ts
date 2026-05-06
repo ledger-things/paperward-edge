@@ -5,9 +5,7 @@ export type BoundedFetchOptions = {
   maxBytes: number;
 };
 
-export type BoundedFetchResult =
-  | { ok: true; body: Response }
-  | { ok: false; reason: string };
+export type BoundedFetchResult = { ok: true; body: Response } | { ok: false; reason: string };
 
 /**
  * Wrap fetch() with a hard timeout, a max-response-size cap, and an explicit

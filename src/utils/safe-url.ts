@@ -6,9 +6,7 @@
 
 const WELL_KNOWN_PATH = "/.well-known/http-message-signatures-directory";
 
-export type ValidateResult =
-  | { ok: true; url: string }
-  | { ok: false; reason: string };
+export type ValidateResult = { ok: true; url: string } | { ok: false; reason: string };
 
 /**
  * Validate an attacker-controlled Signature-Agent URL and return a
@@ -61,7 +59,7 @@ function isIpLiteral(hostname: string): boolean {
 
   // IPv4: four dot-separated decimal octets
   const parts = hostname.split(".");
-  if (parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p) && Number(p) <= 255)) {
+  if (parts.length === 4 && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255)) {
     return true;
   }
 

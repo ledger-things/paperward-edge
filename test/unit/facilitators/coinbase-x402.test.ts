@@ -26,18 +26,24 @@ describe("CoinbaseX402Facilitator.build402", () => {
   it("includes an error reason when one is supplied", async () => {
     const fac = new CoinbaseX402Facilitator({ network: "base-sepolia" });
     const res = fac.build402(REQS, "invalid_amount");
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(JSON.stringify(body)).toContain("invalid_amount");
   });
 });
 
 describe("CoinbaseX402Facilitator.verify", () => {
   it("returns valid: true with a settlement_handle on a successful verify", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ isValid: true, payer: "0xpayer" }), { status: 200 })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ isValid: true, payer: "0xpayer" }), { status: 200 }),
     );
-    const fac = new CoinbaseX402Facilitator({ network: "base-sepolia", fetchImpl: fetchImpl as unknown as typeof fetch });
-    const req = new Request("https://blog.example.com/foo", { headers: { "x-payment": "base64-of-payment-payload" } });
+    const fac = new CoinbaseX402Facilitator({
+      network: "base-sepolia",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const req = new Request("https://blog.example.com/foo", {
+      headers: { "x-payment": "base64-of-payment-payload" },
+    });
     const r = await fac.verify(req, REQS);
     expect(r.valid).toBe(true);
     expect(r.payer).toBe("0xpayer");
@@ -45,10 +51,16 @@ describe("CoinbaseX402Facilitator.verify", () => {
   });
 
   it("returns valid: false with a reason when facilitator rejects", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ isValid: false, invalidReason: "invalid_amount" }), { status: 200 })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ isValid: false, invalidReason: "invalid_amount" }), {
+          status: 200,
+        }),
     );
-    const fac = new CoinbaseX402Facilitator({ network: "base-sepolia", fetchImpl: fetchImpl as unknown as typeof fetch });
+    const fac = new CoinbaseX402Facilitator({
+      network: "base-sepolia",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
     const req = new Request("https://blog.example.com/foo", { headers: { "x-payment": "base64" } });
     const r = await fac.verify(req, REQS);
     expect(r.valid).toBe(false);
@@ -57,14 +69,20 @@ describe("CoinbaseX402Facilitator.verify", () => {
 
   it("throws on non-2xx HTTP from the facilitator (treat as unreachable)", async () => {
     const fetchImpl = vi.fn(async () => new Response("error", { status: 500 }));
-    const fac = new CoinbaseX402Facilitator({ network: "base-sepolia", fetchImpl: fetchImpl as unknown as typeof fetch });
+    const fac = new CoinbaseX402Facilitator({
+      network: "base-sepolia",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
     const req = new Request("https://blog.example.com/foo", { headers: { "x-payment": "base64" } });
     await expect(fac.verify(req, REQS)).rejects.toThrow();
   });
 
   it("returns valid: false when X-PAYMENT header is missing (without calling facilitator)", async () => {
     const fetchImpl = vi.fn();
-    const fac = new CoinbaseX402Facilitator({ network: "base-sepolia", fetchImpl: fetchImpl as unknown as typeof fetch });
+    const fac = new CoinbaseX402Facilitator({
+      network: "base-sepolia",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
     const req = new Request("https://blog.example.com/foo");
     const r = await fac.verify(req, REQS);
     expect(r.valid).toBe(false);
@@ -75,20 +93,33 @@ describe("CoinbaseX402Facilitator.verify", () => {
 
 describe("CoinbaseX402Facilitator.settle", () => {
   it("returns success with tx_reference on a successful settle", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ success: true, transaction: "0xdeadbeef", network: "base-sepolia" }), { status: 200 })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ success: true, transaction: "0xdeadbeef", network: "base-sepolia" }),
+          { status: 200 },
+        ),
     );
-    const fac = new CoinbaseX402Facilitator({ network: "base-sepolia", fetchImpl: fetchImpl as unknown as typeof fetch });
+    const fac = new CoinbaseX402Facilitator({
+      network: "base-sepolia",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
     const r = await fac.settle({ valid: true, settlement_handle: "abc" });
     expect(r.success).toBe(true);
     expect(r.tx_reference).toBe("0xdeadbeef");
   });
 
   it("returns success: false with reason when facilitator settle fails", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ success: false, errorReason: "insufficient_funds" }), { status: 200 })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ success: false, errorReason: "insufficient_funds" }), {
+          status: 200,
+        }),
     );
-    const fac = new CoinbaseX402Facilitator({ network: "base-sepolia", fetchImpl: fetchImpl as unknown as typeof fetch });
+    const fac = new CoinbaseX402Facilitator({
+      network: "base-sepolia",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
     const r = await fac.settle({ valid: true, settlement_handle: "abc" });
     expect(r.success).toBe(false);
     expect(r.reason).toBe("insufficient_funds");
