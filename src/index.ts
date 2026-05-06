@@ -20,7 +20,9 @@ import { pricingResolverMiddleware } from "@/middleware/pricingResolver";
 import { buildPaywallMiddleware } from "@/middleware/paywall";
 import { buildOriginForwarder } from "@/middleware/originForwarder";
 import { buildDetectorRegistry } from "@/detectors/registry";
+import type { Detector } from "@/detectors/types";
 import { buildFacilitatorRegistry, networkForEnv } from "@/facilitators/registry";
+import type { Facilitator } from "@/facilitators/types";
 
 // Build SHA injected at build time. wrangler can substitute via define; for v0,
 // fall back to "dev" if not set.
@@ -28,6 +30,29 @@ const BUILD_SHA = (globalThis as any).__BUILD_SHA__ ?? "dev";
 
 const adminApp = buildAdminApp();
 const healthApp = buildHealthApp(BUILD_SHA);
+
+// Per-isolate registry caches. Detectors and facilitators are stateful
+// (WebBotAuthDetector has an inflight Map for request dedup) — building them
+// once per isolate rather than per request preserves that state across requests.
+// Same lifetime semantics as TenantConfigCache in tenantResolver.ts.
+let detectorsCache: Detector[] | null = null;
+function detectorsFor(env: Env): Detector[] {
+  if (!detectorsCache) detectorsCache = buildDetectorRegistry({ wbaKeyCache: env.KV_KEY_CACHE });
+  return detectorsCache;
+}
+export function _resetDetectorsCache(): void { detectorsCache = null; }
+
+let facilitatorsCache: Map<string, Facilitator> | null = null;
+function facilitatorsFor(env: Env): Map<string, Facilitator> {
+  if (!facilitatorsCache) {
+    const deps = env.COINBASE_FACILITATOR_KEY !== undefined
+      ? { network: networkForEnv(env.ENV), coinbaseApiKey: env.COINBASE_FACILITATOR_KEY }
+      : { network: networkForEnv(env.ENV) };
+    facilitatorsCache = buildFacilitatorRegistry(deps);
+  }
+  return facilitatorsCache;
+}
+export function _resetFacilitatorsCache(): void { facilitatorsCache = null; }
 
 const tenantApp = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -45,13 +70,9 @@ tenantApp.use("*", async (c, next) => {
 
 tenantApp.use("*", buildLoggerMiddleware());
 tenantApp.use("*", tenantResolver);
-tenantApp.use("*", buildDetectorPipelineMiddleware((env) =>
-  buildDetectorRegistry({ wbaKeyCache: env.KV_KEY_CACHE })
-));
+tenantApp.use("*", buildDetectorPipelineMiddleware(detectorsFor));
 tenantApp.use("*", pricingResolverMiddleware);
-tenantApp.use("*", buildPaywallMiddleware((env) =>
-  buildFacilitatorRegistry({ network: networkForEnv(env.ENV) })
-));
+tenantApp.use("*", buildPaywallMiddleware(facilitatorsFor));
 tenantApp.all("*", buildOriginForwarder());
 
 // Top-level dispatcher.

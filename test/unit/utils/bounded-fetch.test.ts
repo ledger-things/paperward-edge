@@ -46,4 +46,25 @@ describe("boundedFetch", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/fetch_failed/i);
   });
+
+  it("rejects an oversized streaming response with no Content-Length header", async () => {
+    // Build a 100-byte body with no content-length header — simulates chunked encoding
+    const body = "x".repeat(100);
+    const stub = vi.fn().mockResolvedValue(
+      new Response(body, { status: 200 }) // no content-length header
+    );
+    const r = await boundedFetch("https://example.com", { timeoutMs: 1000, maxBytes: 50 }, stub);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/too_large/i);
+  });
+
+  it("returns buffered response body so callers can call .text()", async () => {
+    const body = "hello world";
+    const stub = vi.fn().mockResolvedValue(
+      new Response(body, { status: 200 }) // no content-length, streaming path
+    );
+    const r = await boundedFetch("https://example.com", { timeoutMs: 1000, maxBytes: 1024 }, stub);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(await r.body.text()).toBe("hello world");
+  });
 });
