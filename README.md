@@ -222,13 +222,13 @@ Core dependencies are pinned to keep behavior consistent across deployments and 
 |---|---|---|
 | `hono` | 4.12.17 | Worker framework |
 | `web-bot-auth` | 0.1.3 | RFC 9421 verification (Stytch reference) |
-| `ulid` | 2.4.0 | ULID generation |
+| `ulid` | 3.0.2 | ULID generation |
 | `toucan-js` | 4.1.1 | Sentry SDK for Workers |
 | `viem` | ≥ 2.48 | EIP-712 signing for the Sepolia e2e suite |
 | `@cloudflare/workers-types` | 4.x | Workers ambient types |
-| `wrangler` | 3.x | Workers CLI |
-| `typescript` | 5.x | |
-| `vitest` | 2.x | |
+| `wrangler` | 4.x | Workers CLI |
+| `typescript` | 6.x | |
+| `vitest` | 2.x | Pinned at 2.x until [`@cloudflare/vitest-pool-workers`](https://www.npmjs.com/package/@cloudflare/vitest-pool-workers) ships vitest-3+ support |
 | `@biomejs/biome` | 2.4.14 | Lint + format |
 
 The `web-bot-auth` package targets a moving IETF draft. Re-validate signature compatibility on every major version bump.
