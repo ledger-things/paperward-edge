@@ -8,11 +8,12 @@
 import type { MiddlewareHandler } from "hono";
 import type { Env, Vars } from "@/types";
 import { TenantConfigCache } from "@/config/kv";
+import { Metrics } from "@/metrics/analytics-engine";
 
 // Module-scoped cache instance — survives across requests within an isolate.
 let cache: TenantConfigCache | null = null;
 function getCache(env: Env): TenantConfigCache {
-  if (!cache) cache = new TenantConfigCache(env.KV_DOMAINS);
+  if (!cache) cache = new TenantConfigCache(env.KV_DOMAINS, env.ANALYTICS ? new Metrics(env.ANALYTICS) : undefined);
   return cache;
 }
 
@@ -30,12 +31,14 @@ export const tenantResolver: MiddlewareHandler<{ Bindings: Env; Variables: Vars 
     tenant = await getCache(c.env).get(host);
   } catch (err) {
     console.error(JSON.stringify({ at: "tenantResolver", event: "kv_fail", err: String(err) }));
+    c.var.sentry?.captureException(err);
     return c.text("upstream config unavailable", 503);
   }
 
   if (!tenant) {
     c.set("decision_state", { ...c.get("decision_state"), decision: "tenant_unknown", decision_reason: "kv_miss" });
     console.error(JSON.stringify({ at: "tenantResolver", event: "tenant_unknown", host }));
+    c.var.sentry?.captureMessage(`tenant_unknown invariant violation for host: ${host}`, "error");
     return c.text("tenant not configured", 503);
   }
 

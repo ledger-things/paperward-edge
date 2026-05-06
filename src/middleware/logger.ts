@@ -11,6 +11,7 @@ import type { Env, Vars } from "@/types";
 import type { LogEntry } from "@/logging/types";
 import { writeLogToR2 } from "@/logging/r2-writer";
 import { Metrics } from "@/metrics/analytics-engine";
+import { getSentry } from "@/observability/sentry";
 
 export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Variables: Vars }> {
   return async (c, next) => {
@@ -18,6 +19,11 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
     const id = ulid();
     c.set("request_id", id);
     c.set("request_started_ms", start);
+
+    // Build per-request Sentry instance and store on context before calling next()
+    // so downstream middleware can use c.var.sentry?.captureException(...).
+    const sentry = getSentry({ env: c.env, request: c.req.raw, executionCtx: c.executionCtx });
+    c.set("sentry", sentry);
 
     await next();
 
@@ -70,7 +76,13 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
       }
     }
 
-    c.executionCtx.waitUntil(writeLogToR2(c.env.R2_LOGS, entry));
+    const capturedSentry = sentry;
+    c.executionCtx.waitUntil(
+      writeLogToR2(c.env.R2_LOGS, entry).catch((err) => {
+        console.error(JSON.stringify({ at: "logger", event: "r2_write_failed", err: String(err) }));
+        capturedSentry?.captureException(err);
+      })
+    );
   };
 }
 

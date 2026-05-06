@@ -18,6 +18,7 @@
 import type { MiddlewareHandler } from "hono";
 import type { Env, Vars } from "@/types";
 import type { Facilitator, PaymentRequirements } from "@/facilitators/types";
+import { Metrics } from "@/metrics/analytics-engine";
 
 export function buildPaywallMiddleware(
   getRegistry: (env: Env) => Map<string, Facilitator>,
@@ -42,6 +43,9 @@ export function buildPaywallMiddleware(
       return c.text("misconfigured tenant", 503);
     }
 
+    const metrics = c.env.ANALYTICS ? new Metrics(c.env.ANALYTICS) : null;
+    const facilitator_id = tenant.facilitator_id;
+
     const requirements: PaymentRequirements = {
       amount_usdc: ds.price_usdc!,
       recipient: tenant.payout_address,
@@ -65,9 +69,14 @@ export function buildPaywallMiddleware(
 
     let verifyResult;
     try {
+      const verifyStart = Date.now();
       verifyResult = await facilitator.verify(c.req.raw, requirements);
+      metrics?.verifyLatency({ facilitator_id, latency_ms: Date.now() - verifyStart });
     } catch (err) {
       console.error(JSON.stringify({ at: "paywall", event: "verify_threw", err: String(err) }));
+      if (!isLogOnly) {
+        c.var.sentry?.captureException(err);
+      }
       if (isLogOnly) {
         c.set("decision_state", { ...ds, decision: "would_charge_verify_failed", decision_reason: "facilitator_unavailable" });
         await next();
@@ -113,15 +122,22 @@ export function buildPaywallMiddleware(
 
     let settleResult;
     try {
+      const settleStart = Date.now();
       settleResult = await facilitator.settle(verifyResult);
+      metrics?.settleLatency({ facilitator_id, latency_ms: Date.now() - settleStart });
     } catch (err) {
       console.error(JSON.stringify({ at: "paywall", event: "settle_threw", err: String(err) }));
+      c.var.sentry?.captureException(err);
+      metrics?.settleFailure({ facilitator_id, reason: "settle_threw" });
       c.set("decision_state", { ...updated, decision: "charge_unsettled", decision_reason: "settle_threw" });
       return;
     }
 
     if (!settleResult.success) {
-      c.set("decision_state", { ...updated, decision: "charge_unsettled", decision_reason: settleResult.reason ?? "settle_failed" });
+      const reason = settleResult.reason ?? "settle_failed";
+      metrics?.settleFailure({ facilitator_id, reason });
+      c.var.sentry?.captureException(new Error(`settle failed: ${reason}`));
+      c.set("decision_state", { ...updated, decision: "charge_unsettled", decision_reason: reason });
       return;
     }
 

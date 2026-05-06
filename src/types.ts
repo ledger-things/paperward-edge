@@ -7,6 +7,7 @@ import type { TenantConfig } from "@/config/types";
 import type { DetectionResult } from "@/detectors/types";
 import type { VerifyResult } from "@/facilitators/types";
 import type { Decision } from "@/logging/types";
+import type { SentryLike } from "@/observability/sentry";
 
 export type Env = {
   // Plain vars
@@ -45,4 +46,5 @@ export type Vars = {
   verify_result: VerifyResult | null;
   decision_state: DecisionState;
   origin_status: number | null;
+  sentry: SentryLike;             // per-request Sentry instance (set by logger middleware)
 };
