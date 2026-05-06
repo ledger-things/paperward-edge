@@ -6,6 +6,7 @@
 
 import type { Handler } from "hono";
 import type { Env, Vars } from "@/types";
+import { Metrics } from "@/metrics/analytics-engine";
 
 const STRIP_REQUEST_HEADERS = new Set([
   "x-payment", "signature", "signature-input", "signature-agent",
@@ -50,11 +51,17 @@ export function buildOriginForwarder(fetchImpl?: typeof fetch): Handler<{ Bindin
       init.body = c.req.raw.body;
     }
 
+    const metrics = c.env.ANALYTICS ? new Metrics(c.env.ANALYTICS) : null;
+    const tenant_id = tenant.tenant_id;
+
     let resp: Response;
+    const originStart = Date.now();
     try {
       resp = await doFetch(forwardedUrl, init);
+      metrics?.originLatency({ tenant_id, latency_ms: Date.now() - originStart });
     } catch (err) {
       console.error(JSON.stringify({ at: "originForwarder", event: "fetch_threw", err: String(err) }));
+      c.var.sentry?.captureException(err);
       c.set("origin_status", null);
       const ds = c.var.decision_state;
       if (ds.decision === "charge_no_payment") {

@@ -8,6 +8,7 @@
 // the middleware can fail closed with 503.
 
 import type { TenantConfig } from "@/config/types";
+import type { Metrics } from "@/metrics/analytics-engine";
 
 export type CacheOutcome = "hit" | "miss" | "stale";
 
@@ -22,7 +23,7 @@ const KV_CACHE_TTL_S = 60;
 export class TenantConfigCache {
   private readonly cache = new Map<string, Entry>();
 
-  constructor(private readonly kv: KVNamespace) {}
+  constructor(private readonly kv: KVNamespace, private readonly metrics?: Metrics) {}
 
   /**
    * Returns the tenant config for a hostname, or null if no tenant is configured.
@@ -33,6 +34,7 @@ export class TenantConfigCache {
     const cached = this.cache.get(hostname);
 
     if (cached && now - cached.fetched_at < FRESHNESS_MS) {
+      this.metrics?.configCache({ outcome: "hit" });
       return cached.config; // cache hit
     }
 
@@ -42,6 +44,7 @@ export class TenantConfigCache {
     } catch (err) {
       if (cached) {
         // stale fallback
+        this.metrics?.configCache({ outcome: "stale" });
         return cached.config;
       }
       throw err;
@@ -49,11 +52,13 @@ export class TenantConfigCache {
 
     if (raw === null) {
       this.cache.delete(hostname);
+      this.metrics?.configCache({ outcome: "miss" });
       return null;
     }
 
     const config = JSON.parse(raw) as TenantConfig;
     this.cache.set(hostname, { config, fetched_at: now });
+    this.metrics?.configCache({ outcome: "miss" });
     return config;
   }
 
