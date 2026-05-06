@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ledger-things/paperward-edge/security/policy
+    about: Please report security issues privately per SECURITY.md, not as a public issue.
+  - name: Spec / design questions
+    url: https://github.com/ledger-things/paperward-edge/blob/main/docs/superpowers/specs/2026-05-05-edge-layer-v0-design.md
+    about: The design spec covers most "why" questions. Please skim before opening an issue.
