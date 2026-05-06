@@ -11,13 +11,17 @@ export function buildHealthApp(buildSha: string) {
       // A no-op read on a known-missing key proves the binding is live.
       await c.env.KV_DOMAINS.get("__healthz__");
       kvOk = true;
-    } catch { kvOk = false; }
+    } catch {
+      kvOk = false;
+    }
 
     let r2Ok = false;
     try {
       await c.env.R2_LOGS.head("__healthz__");
       r2Ok = true; // null is fine; we just need the call to not throw
-    } catch { r2Ok = false; }
+    } catch {
+      r2Ok = false;
+    }
 
     return c.json({
       build_sha: buildSha,

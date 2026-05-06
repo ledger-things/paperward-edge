@@ -18,7 +18,7 @@ export function resolvePricing(
   path: string,
 ): DecisionState {
   const rules = [...tenant.pricing_rules]
-    .filter(r => r.enabled)
+    .filter((r) => r.enabled)
     .sort((a, b) => a.priority - b.priority);
 
   for (const rule of rules) {
@@ -66,9 +66,16 @@ function initialChargeDecisionForRule(
   return status === "log_only" ? "would_charge_no_payment" : "charge_no_payment";
 }
 
-export const pricingResolverMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = async (c, next) => {
+export const pricingResolverMiddleware: MiddlewareHandler<{
+  Bindings: Env;
+  Variables: Vars;
+}> = async (c, next) => {
   const tenant = c.var.tenant;
-  if (!tenant || tenant.status === "paused_by_publisher" || tenant.status === "suspended_by_paperward") {
+  if (
+    !tenant ||
+    tenant.status === "paused_by_publisher" ||
+    tenant.status === "suspended_by_paperward"
+  ) {
     await next();
     return;
   }
@@ -81,14 +88,20 @@ export const pricingResolverMiddleware: MiddlewareHandler<{ Bindings: Env; Varia
   try {
     decision = resolvePricing(tenant, c.var.detection, path);
   } catch (err) {
-    console.error(JSON.stringify({ at: "pricingResolverMiddleware", event: "resolve_threw", err: String(err) }));
+    console.error(
+      JSON.stringify({ at: "pricingResolverMiddleware", event: "resolve_threw", err: String(err) }),
+    );
     c.var.sentry?.captureException(err);
     const def = tenant.default_action;
     decision = {
       decision:
         tenant.status === "log_only"
-          ? def === "allow" ? "would_default_allow" : "would_block"
-          : def === "allow" ? "default_allow" : "block",
+          ? def === "allow"
+            ? "would_default_allow"
+            : "would_block"
+          : def === "allow"
+            ? "default_allow"
+            : "block",
       decision_reason: "resolver_threw",
       rule_id: null,
       price_usdc: null,

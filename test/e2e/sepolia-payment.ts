@@ -23,7 +23,10 @@ type X402Requirements = {
   asset: string;
 };
 
-export async function makeSepoliaPayment(reqs: X402Requirements, privateKeyHex: string): Promise<string> {
+export async function makeSepoliaPayment(
+  reqs: X402Requirements,
+  privateKeyHex: string,
+): Promise<string> {
   const account = privateKeyToAccount(privateKeyHex as `0x${string}`);
   const client = createWalletClient({ chain: baseSepolia, transport: http(), account });
 
@@ -32,7 +35,8 @@ export async function makeSepoliaPayment(reqs: X402Requirements, privateKeyHex: 
   // or domain, update here.
   const validAfter = 0n;
   const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600);
-  const nonce = `0x${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex")}` as `0x${string}`;
+  const nonce =
+    `0x${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex")}` as `0x${string}`;
   const amountWei = BigInt(Math.floor(parseFloat(reqs.maxAmountRequired) * 1_000_000)); // USDC has 6 decimals
 
   const domain = {
@@ -72,7 +76,15 @@ export async function makeSepoliaPayment(reqs: X402Requirements, privateKeyHex: 
     x402Version: 1,
     scheme: "exact",
     network: reqs.network,
-    payload: { signature, authorization: { ...message, value: message.value.toString(), validAfter: validAfter.toString(), validBefore: validBefore.toString() } },
+    payload: {
+      signature,
+      authorization: {
+        ...message,
+        value: message.value.toString(),
+        validAfter: validAfter.toString(),
+        validBefore: validBefore.toString(),
+      },
+    },
   };
 
   return Buffer.from(JSON.stringify(payload)).toString("base64");

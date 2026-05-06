@@ -19,13 +19,19 @@ describe("adminAuth", () => {
 
   it("returns 401 with wrong bearer", async () => {
     const { app: a, env } = app("secret");
-    const r = await a.fetch(new Request("https://x/x", { headers: { authorization: "Bearer wrong" } }), env);
+    const r = await a.fetch(
+      new Request("https://x/x", { headers: { authorization: "Bearer wrong" } }),
+      env,
+    );
     expect(r.status).toBe(401);
   });
 
   it("calls next() with correct bearer", async () => {
     const { app: a, env } = app("secret");
-    const r = await a.fetch(new Request("https://x/x", { headers: { authorization: "Bearer secret" } }), env);
+    const r = await a.fetch(
+      new Request("https://x/x", { headers: { authorization: "Bearer secret" } }),
+      env,
+    );
     expect(r.status).toBe(200);
     expect(await r.text()).toBe("ok");
   });
@@ -33,7 +39,10 @@ describe("adminAuth", () => {
   it("uses constant-time compare to avoid timing leaks", async () => {
     // Just smoke-test that supplying an obviously wrong-length token still returns 401
     const { app: a, env } = app("secret-very-long");
-    const r = await a.fetch(new Request("https://x/x", { headers: { authorization: "Bearer s" } }), env);
+    const r = await a.fetch(
+      new Request("https://x/x", { headers: { authorization: "Bearer s" } }),
+      env,
+    );
     expect(r.status).toBe(401);
   });
 });

@@ -1,10 +1,6 @@
 // src/config/types.ts
 
-export type TenantStatus =
-  | "active"
-  | "log_only"
-  | "paused_by_publisher"
-  | "suspended_by_paperward";
+export type TenantStatus = "active" | "log_only" | "paused_by_publisher" | "suspended_by_paperward";
 
 export type PricingAction = "charge" | "allow" | "block";
 

@@ -41,14 +41,11 @@ export async function signRequest(opts: SignOptions): Promise<Request> {
     `"@signature-params": ${sigParamStr}`,
   ].join("\n");
 
-  const privBytes = Buffer.from(FIXTURE_KEYS.privateKeyPkcs8Base64, "base64") as unknown as ArrayBuffer;
-  const privKey = await subtle.importKey(
-    "pkcs8",
-    privBytes,
-    { name: "Ed25519" },
-    false,
-    ["sign"],
-  );
+  const privBytes = Buffer.from(
+    FIXTURE_KEYS.privateKeyPkcs8Base64,
+    "base64",
+  ) as unknown as ArrayBuffer;
+  const privKey = await subtle.importKey("pkcs8", privBytes, { name: "Ed25519" }, false, ["sign"]);
   // Cast needed: node:crypto subtle.sign types clash with @cloudflare/workers-types BufferSource
   const msgBytes = new TextEncoder().encode(components) as unknown as ArrayBuffer;
   const sigBytes = await subtle.sign({ name: "Ed25519" }, privKey, msgBytes);

@@ -19,8 +19,18 @@ const baseTenant: TenantConfig = {
   updated_at: "2026-05-05T00:00:00Z",
 };
 
-const human: DetectionResult = { agent_id: "human", signed: false, detector_id: "human", confidence: "high" };
-const oai: DetectionResult = { agent_id: "signed:openai.com", signed: true, detector_id: "web-bot-auth", confidence: "high" };
+const human: DetectionResult = {
+  agent_id: "human",
+  signed: false,
+  detector_id: "human",
+  confidence: "high",
+};
+const oai: DetectionResult = {
+  agent_id: "signed:openai.com",
+  signed: true,
+  detector_id: "web-bot-auth",
+  confidence: "high",
+};
 
 describe("resolvePricing", () => {
   it("returns default_allow when no rules match", () => {
@@ -42,8 +52,23 @@ describe("resolvePricing", () => {
     const t: TenantConfig = {
       ...baseTenant,
       pricing_rules: [
-        { id: "r1", priority: 100, path_pattern: "*", agent_pattern: "*", action: "allow", enabled: true },
-        { id: "r2", priority: 1, path_pattern: "/articles/*", agent_pattern: "signed:*", action: "charge", price_usdc: "0.005", enabled: true },
+        {
+          id: "r1",
+          priority: 100,
+          path_pattern: "*",
+          agent_pattern: "*",
+          action: "allow",
+          enabled: true,
+        },
+        {
+          id: "r2",
+          priority: 1,
+          path_pattern: "/articles/*",
+          agent_pattern: "signed:*",
+          action: "charge",
+          price_usdc: "0.005",
+          enabled: true,
+        },
       ],
     };
     const r = resolvePricing(t, oai, "/articles/foo");
@@ -56,7 +81,15 @@ describe("resolvePricing", () => {
     const t: TenantConfig = {
       ...baseTenant,
       pricing_rules: [
-        { id: "r1", priority: 1, path_pattern: "*", agent_pattern: "signed:*", action: "charge", price_usdc: "0.005", enabled: false },
+        {
+          id: "r1",
+          priority: 1,
+          path_pattern: "*",
+          agent_pattern: "signed:*",
+          action: "charge",
+          price_usdc: "0.005",
+          enabled: false,
+        },
       ],
     };
     const r = resolvePricing(t, oai, "/foo");
@@ -66,7 +99,16 @@ describe("resolvePricing", () => {
   it("returns 'allow' decision when matching rule has action=allow", () => {
     const t: TenantConfig = {
       ...baseTenant,
-      pricing_rules: [{ id: "r1", priority: 1, path_pattern: "*", agent_pattern: "human", action: "allow", enabled: true }],
+      pricing_rules: [
+        {
+          id: "r1",
+          priority: 1,
+          path_pattern: "*",
+          agent_pattern: "human",
+          action: "allow",
+          enabled: true,
+        },
+      ],
     };
     const r = resolvePricing(t, human, "/foo");
     expect(r.decision).toBe("allow");
@@ -76,7 +118,16 @@ describe("resolvePricing", () => {
   it("returns 'block' decision when matching rule has action=block", () => {
     const t: TenantConfig = {
       ...baseTenant,
-      pricing_rules: [{ id: "r1", priority: 1, path_pattern: "*", agent_pattern: "unknown", action: "block", enabled: true }],
+      pricing_rules: [
+        {
+          id: "r1",
+          priority: 1,
+          path_pattern: "*",
+          agent_pattern: "unknown",
+          action: "block",
+          enabled: true,
+        },
+      ],
     };
     const r = resolvePricing(t, null, "/foo");
     expect(r.decision).toBe("block");
@@ -92,7 +143,17 @@ describe("resolvePricing", () => {
     const t: TenantConfig = {
       ...baseTenant,
       status: "log_only",
-      pricing_rules: [{ id: "r1", priority: 1, path_pattern: "*", agent_pattern: "signed:*", action: "charge", price_usdc: "0.01", enabled: true }],
+      pricing_rules: [
+        {
+          id: "r1",
+          priority: 1,
+          path_pattern: "*",
+          agent_pattern: "signed:*",
+          action: "charge",
+          price_usdc: "0.01",
+          enabled: true,
+        },
+      ],
     };
     const r = resolvePricing(t, oai, "/foo");
     expect(r.decision).toBe("would_charge_no_payment"); // initial state; paywall will refine to would_charge_paid if verify succeeds

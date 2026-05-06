@@ -25,7 +25,9 @@ const tenant: TenantConfig = {
 };
 
 describe("tenantResolver", () => {
-  beforeEach(() => { _resetTenantCache(); });
+  beforeEach(() => {
+    _resetTenantCache();
+  });
 
   it("attaches tenant to ctx and calls next when KV has a config", async () => {
     const env = { KV_DOMAINS: makeKvWith(tenant) };
@@ -33,7 +35,16 @@ describe("tenantResolver", () => {
       tenantResolver,
       new Request("https://blog.example.com/foo", { headers: { host: "blog.example.com" } }),
       env,
-      { decision_state: { decision: "default_allow", decision_reason: null, rule_id: null, price_usdc: null, paid: false, payment_tx: null } },
+      {
+        decision_state: {
+          decision: "default_allow",
+          decision_reason: null,
+          rule_id: null,
+          price_usdc: null,
+          paid: false,
+          payment_tx: null,
+        },
+      },
     );
     expect(response.status).toBe(200);
     expect(vars.tenant).toEqual(tenant);
@@ -45,14 +56,27 @@ describe("tenantResolver", () => {
       tenantResolver,
       new Request("https://ghost.example.com/foo", { headers: { host: "ghost.example.com" } }),
       env,
-      { decision_state: { decision: "default_allow", decision_reason: null, rule_id: null, price_usdc: null, paid: false, payment_tx: null } },
+      {
+        decision_state: {
+          decision: "default_allow",
+          decision_reason: null,
+          rule_id: null,
+          price_usdc: null,
+          paid: false,
+          payment_tx: null,
+        },
+      },
     );
     expect(response.status).toBe(503);
     expect(vars.decision_state?.decision).toBe("tenant_unknown");
   });
 
   it("short-circuits to origin pass-through on status: paused_by_publisher (calls fetch directly)", async () => {
-    const t = { ...tenant, status: "paused_by_publisher" as const, origin: "https://example-origin.invalid" };
+    const t = {
+      ...tenant,
+      status: "paused_by_publisher" as const,
+      origin: "https://example-origin.invalid",
+    };
     const env = { KV_DOMAINS: makeKvWith(t) };
     // tenantResolver is responsible for short-circuiting; it does not call fetch itself.
     // It should set decision = status_paused, mark a flag, and call next() so originForwarder
@@ -61,7 +85,16 @@ describe("tenantResolver", () => {
       tenantResolver,
       new Request("https://blog.example.com/foo", { headers: { host: "blog.example.com" } }),
       env,
-      { decision_state: { decision: "default_allow", decision_reason: null, rule_id: null, price_usdc: null, paid: false, payment_tx: null } },
+      {
+        decision_state: {
+          decision: "default_allow",
+          decision_reason: null,
+          rule_id: null,
+          price_usdc: null,
+          paid: false,
+          payment_tx: null,
+        },
+      },
     );
     expect(vars.tenant?.status).toBe("paused_by_publisher");
     expect(vars.decision_state?.decision).toBe("status_paused");
@@ -74,7 +107,16 @@ describe("tenantResolver", () => {
       tenantResolver,
       new Request("https://blog.example.com/foo", { headers: { host: "blog.example.com" } }),
       env,
-      { decision_state: { decision: "default_allow", decision_reason: null, rule_id: null, price_usdc: null, paid: false, payment_tx: null } },
+      {
+        decision_state: {
+          decision: "default_allow",
+          decision_reason: null,
+          rule_id: null,
+          price_usdc: null,
+          paid: false,
+          payment_tx: null,
+        },
+      },
     );
     expect(vars.decision_state?.decision).toBe("status_suspended");
   });

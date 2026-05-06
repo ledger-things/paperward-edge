@@ -40,19 +40,24 @@ function detectorsFor(env: Env): Detector[] {
   if (!detectorsCache) detectorsCache = buildDetectorRegistry({ wbaKeyCache: env.KV_KEY_CACHE });
   return detectorsCache;
 }
-export function _resetDetectorsCache(): void { detectorsCache = null; }
+export function _resetDetectorsCache(): void {
+  detectorsCache = null;
+}
 
 let facilitatorsCache: Map<string, Facilitator> | null = null;
 function facilitatorsFor(env: Env): Map<string, Facilitator> {
   if (!facilitatorsCache) {
-    const deps = env.COINBASE_FACILITATOR_KEY !== undefined
-      ? { network: networkForEnv(env.ENV), coinbaseApiKey: env.COINBASE_FACILITATOR_KEY }
-      : { network: networkForEnv(env.ENV) };
+    const deps =
+      env.COINBASE_FACILITATOR_KEY !== undefined
+        ? { network: networkForEnv(env.ENV), coinbaseApiKey: env.COINBASE_FACILITATOR_KEY }
+        : { network: networkForEnv(env.ENV) };
     facilitatorsCache = buildFacilitatorRegistry(deps);
   }
   return facilitatorsCache;
 }
-export function _resetFacilitatorsCache(): void { facilitatorsCache = null; }
+export function _resetFacilitatorsCache(): void {
+  facilitatorsCache = null;
+}
 
 const tenantApp = new Hono<{ Bindings: Env; Variables: Vars }>();
 
@@ -63,7 +68,14 @@ tenantApp.use("*", async (c, next) => {
   c.set("tenant", null);
   c.set("detection", null);
   c.set("verify_result", null);
-  c.set("decision_state", { decision: "allow", decision_reason: null, rule_id: null, price_usdc: null, paid: false, payment_tx: null });
+  c.set("decision_state", {
+    decision: "allow",
+    decision_reason: null,
+    rule_id: null,
+    price_usdc: null,
+    paid: false,
+    payment_tx: null,
+  });
   c.set("origin_status", null);
   await next();
 });
@@ -104,7 +116,6 @@ app.all("*", async (c) => {
 // wrangler.toml binding declares it. Class shape will be filled in when the
 // rate-limiting feature is built.
 export class RateLimiterDO {
-  constructor(_state: DurableObjectState, _env: Env) {}
   async fetch(_req: Request): Promise<Response> {
     return new Response("rate limiter not implemented in v0", { status: 501 });
   }

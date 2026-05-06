@@ -5,11 +5,27 @@ import { runMiddleware } from "../../mocks/hono-context";
 import type { TenantConfig } from "@/config/types";
 
 const t: TenantConfig = {
-  schema_version: 1, tenant_id: "t1", hostname: "blog.example.com",
-  origin: "https://o", status: "active", default_action: "allow",
-  facilitator_id: "coinbase-x402-base", payout_address: "0x",
-  pricing_rules: [{ id: "r1", priority: 1, path_pattern: "/p", agent_pattern: "*", action: "allow", enabled: true }],
-  config_version: 1, created_at: "x", updated_at: "x",
+  schema_version: 1,
+  tenant_id: "t1",
+  hostname: "blog.example.com",
+  origin: "https://o",
+  status: "active",
+  default_action: "allow",
+  facilitator_id: "coinbase-x402-base",
+  payout_address: "0x",
+  pricing_rules: [
+    {
+      id: "r1",
+      priority: 1,
+      path_pattern: "/p",
+      agent_pattern: "*",
+      action: "allow",
+      enabled: true,
+    },
+  ],
+  config_version: 1,
+  created_at: "x",
+  updated_at: "x",
 };
 
 describe("pricingResolverMiddleware", () => {
@@ -25,7 +41,14 @@ describe("pricingResolverMiddleware", () => {
   });
 
   it("skips on paused tenant", async () => {
-    const initial = { decision: "status_paused" as const, decision_reason: null, rule_id: null, price_usdc: null, paid: false, payment_tx: null };
+    const initial = {
+      decision: "status_paused" as const,
+      decision_reason: null,
+      rule_id: null,
+      price_usdc: null,
+      paid: false,
+      payment_tx: null,
+    };
     const { vars } = await runMiddleware(
       pricingResolverMiddleware,
       new Request("https://blog.example.com/p"),

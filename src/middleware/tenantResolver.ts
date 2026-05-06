@@ -13,20 +13,29 @@ import { Metrics } from "@/metrics/analytics-engine";
 // Module-scoped cache instance — survives across requests within an isolate.
 let cache: TenantConfigCache | null = null;
 function getCache(env: Env): TenantConfigCache {
-  if (!cache) cache = new TenantConfigCache(env.KV_DOMAINS, env.ANALYTICS ? new Metrics(env.ANALYTICS) : undefined);
+  if (!cache)
+    cache = new TenantConfigCache(
+      env.KV_DOMAINS,
+      env.ANALYTICS ? new Metrics(env.ANALYTICS) : undefined,
+    );
   return cache;
 }
 
 // For tests: reset the cache so each test starts fresh.
-export function _resetTenantCache(): void { cache = null; }
+export function _resetTenantCache(): void {
+  cache = null;
+}
 
-export const tenantResolver: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = async (c, next) => {
+export const tenantResolver: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = async (
+  c,
+  next,
+) => {
   const host = (c.req.header("host") ?? "").toLowerCase();
   if (!host) {
     return c.text("Missing Host header", 400);
   }
 
-  let tenant;
+  let tenant: Awaited<ReturnType<TenantConfigCache["get"]>>;
   try {
     tenant = await getCache(c.env).get(host);
   } catch (err) {
@@ -36,7 +45,11 @@ export const tenantResolver: MiddlewareHandler<{ Bindings: Env; Variables: Vars 
   }
 
   if (!tenant) {
-    c.set("decision_state", { ...c.get("decision_state"), decision: "tenant_unknown", decision_reason: "kv_miss" });
+    c.set("decision_state", {
+      ...c.get("decision_state"),
+      decision: "tenant_unknown",
+      decision_reason: "kv_miss",
+    });
     console.error(JSON.stringify({ at: "tenantResolver", event: "tenant_unknown", host }));
     c.var.sentry?.captureMessage(`tenant_unknown invariant violation for host: ${host}`, "error");
     return c.text("tenant not configured", 503);

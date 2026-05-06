@@ -23,7 +23,10 @@ const KV_CACHE_TTL_S = 60;
 export class TenantConfigCache {
   private readonly cache = new Map<string, Entry>();
 
-  constructor(private readonly kv: KVNamespace, private readonly metrics?: Metrics) {}
+  constructor(
+    private readonly kv: KVNamespace,
+    private readonly metrics?: Metrics,
+  ) {}
 
   /**
    * Returns the tenant config for a hostname, or null if no tenant is configured.

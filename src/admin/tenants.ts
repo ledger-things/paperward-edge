@@ -10,7 +10,7 @@ export function buildAdminTenantRoutes() {
   app.use("*", adminAuth);
 
   app.post("/tenants", async (c) => {
-    const body = await c.req.json().catch(() => null) as Partial<TenantConfig> | null;
+    const body = (await c.req.json().catch(() => null)) as Partial<TenantConfig> | null;
     const valid = validateTenantInput(body);
     if (!valid.ok) return c.text(valid.reason, 400);
     const input = valid.config;
@@ -41,7 +41,7 @@ export function buildAdminTenantRoutes() {
     if (raw === null) return c.text("not found", 404);
     const before = JSON.parse(raw) as TenantConfig;
 
-    const body = await c.req.json().catch(() => null) as Partial<TenantConfig> | null;
+    const body = (await c.req.json().catch(() => null)) as Partial<TenantConfig> | null;
     const valid = validateTenantInput(body);
     if (!valid.ok) return c.text(valid.reason, 400);
     if (valid.config.hostname !== hostname) return c.text("hostname in body must match URL", 400);
@@ -71,16 +71,32 @@ export function buildAdminTenantRoutes() {
 }
 
 type ValidationResult =
-  | { ok: true; config: Omit<TenantConfig, "schema_version" | "config_version" | "created_at" | "updated_at"> }
+  | {
+      ok: true;
+      config: Omit<TenantConfig, "schema_version" | "config_version" | "created_at" | "updated_at">;
+    }
   | { ok: false; reason: string };
 
 function validateTenantInput(body: unknown): ValidationResult {
   if (!body || typeof body !== "object") return { ok: false, reason: "body must be a JSON object" };
   const b = body as Record<string, unknown>;
-  for (const k of ["tenant_id", "hostname", "origin", "status", "default_action", "facilitator_id", "payout_address"]) {
-    if (typeof b[k] !== "string") return { ok: false, reason: `field ${k} required and must be a string` };
+  for (const k of [
+    "tenant_id",
+    "hostname",
+    "origin",
+    "status",
+    "default_action",
+    "facilitator_id",
+    "payout_address",
+  ]) {
+    if (typeof b[k] !== "string")
+      return { ok: false, reason: `field ${k} required and must be a string` };
   }
-  if (!["active", "log_only", "paused_by_publisher", "suspended_by_paperward"].includes(b.status as string)) {
+  if (
+    !["active", "log_only", "paused_by_publisher", "suspended_by_paperward"].includes(
+      b.status as string,
+    )
+  ) {
     return { ok: false, reason: "invalid status" };
   }
   if (!["allow", "block"].includes(b.default_action as string)) {
@@ -118,7 +134,10 @@ function validateTenantInput(body: unknown): ValidationResult {
       return { ok: false, reason: `rule ${ruleId}: agent_pattern must be a non-empty string` };
     }
     if (!VALID_ACTIONS.has(r.action as string)) {
-      return { ok: false, reason: `rule ${ruleId}: action must be one of "charge", "allow", "block"` };
+      return {
+        ok: false,
+        reason: `rule ${ruleId}: action must be one of "charge", "allow", "block"`,
+      };
     }
     if (typeof r.enabled !== "boolean") {
       return { ok: false, reason: `rule ${ruleId}: enabled must be a boolean` };
@@ -128,7 +147,10 @@ function validateTenantInput(body: unknown): ValidationResult {
     }
     if (r.action === "charge") {
       if (typeof r.price_usdc !== "string" || r.price_usdc === "") {
-        return { ok: false, reason: `rule ${ruleId}: price_usdc must be a non-empty string for charge rules` };
+        return {
+          ok: false,
+          reason: `rule ${ruleId}: price_usdc must be a non-empty string for charge rules`,
+        };
       }
     }
   }

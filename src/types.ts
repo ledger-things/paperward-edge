@@ -39,12 +39,12 @@ export type DecisionState = {
 };
 
 export type Vars = {
-  request_id: string;             // ULID, used as LogEntry.id
-  request_started_ms: number;     // performance.now() at entry
-  tenant: TenantConfig | null;    // null for the tenant_unknown short-circuit
+  request_id: string; // ULID, used as LogEntry.id
+  request_started_ms: number; // performance.now() at entry
+  tenant: TenantConfig | null; // null for the tenant_unknown short-circuit
   detection: DetectionResult | null;
   verify_result: VerifyResult | null;
   decision_state: DecisionState;
   origin_status: number | null;
-  sentry: SentryLike;             // per-request Sentry instance (set by logger middleware)
+  sentry: SentryLike; // per-request Sentry instance (set by logger middleware)
 };

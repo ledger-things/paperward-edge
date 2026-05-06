@@ -24,7 +24,6 @@ import { _resetTenantCache } from "@/middleware/tenantResolver";
 import { _resetDetectorsCache, _resetFacilitatorsCache } from "@/index";
 import { signRequest } from "../fixtures/wba/sign";
 import { FIXTURE_DIRECTORY } from "../fixtures/wba/directory";
-import { FIXTURE_KEYS } from "../fixtures/wba/keys";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,22 +41,21 @@ function humanRequest(url: string, extraHeaders?: Record<string, string>): Reque
 }
 
 /** Signed agent request via WBA fixture keypair. */
-async function agentRequest(
-  url: string,
-  extraHeaders?: Record<string, string>,
-): Promise<Request> {
+async function agentRequest(url: string, extraHeaders?: Record<string, string>): Promise<Request> {
   return signRequest(extraHeaders ? { url, additionalHeaders: extraHeaders } : { url });
 }
 
 /** Standard fetch spy that handles facilitator + WBA directory + origin calls. */
-function makePaymentFetchSpy(opts: {
-  verifyValid?: boolean;
-  verifyReason?: string;
-  settleSuccess?: boolean;
-  settleReason?: string;
-  originStatus?: number;
-  originBody?: string;
-} = {}) {
+function makePaymentFetchSpy(
+  opts: {
+    verifyValid?: boolean;
+    verifyReason?: string;
+    settleSuccess?: boolean;
+    settleReason?: string;
+    originStatus?: number;
+    originBody?: string;
+  } = {},
+) {
   const {
     verifyValid = true,
     verifyReason,
@@ -81,10 +79,10 @@ function makePaymentFetchSpy(opts: {
     // Facilitator verify
     if (url.startsWith("https://x402.org/facilitator/verify")) {
       if (verifyValid) {
-        return new Response(
-          JSON.stringify({ isValid: true, payer: "0xpayer" }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ isValid: true, payer: "0xpayer" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       return new Response(
         JSON.stringify({ isValid: false, invalidReason: verifyReason ?? "amount_mismatch" }),
@@ -95,10 +93,10 @@ function makePaymentFetchSpy(opts: {
     // Facilitator settle
     if (url.startsWith("https://x402.org/facilitator/settle")) {
       if (settleSuccess) {
-        return new Response(
-          JSON.stringify({ success: true, transaction: "0xtxhash" }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ success: true, transaction: "0xtxhash" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       return new Response(
         JSON.stringify({ success: false, errorReason: settleReason ?? "settle_rejected" }),
@@ -134,19 +132,26 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 describe("Decision: allow", () => {
   it("forwards to origin and logs decision=allow when rule action=allow matches human", async () => {
-    await seedTenant(makeTenant({
-      hostname: "allow.test.example.com",
-      origin: "https://origin.allow.test.example.com",
-      pricing_rules: [{
-        id: "r-allow", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "allow", enabled: true,
-      }],
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("origin says hi", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "allow.test.example.com",
+        origin: "https://origin.allow.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-allow",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "allow",
+            enabled: true,
+          },
+        ],
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("origin says hi", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -161,7 +166,7 @@ describe("Decision: allow", () => {
     fetchSpy.mockRestore();
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "allow")).toBe(true);
+    expect(logs.some((l) => l.decision === "allow")).toBe(true);
   });
 });
 
@@ -170,15 +175,22 @@ describe("Decision: allow", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: block", () => {
   it("returns 403 and logs decision=block when rule action=block", async () => {
-    await seedTenant(makeTenant({
-      hostname: "block.test.example.com",
-      origin: "https://origin.block.test.example.com",
-      pricing_rules: [{
-        id: "r-block", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "block", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "block.test.example.com",
+        origin: "https://origin.block.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-block",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "block",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -191,7 +203,7 @@ describe("Decision: block", () => {
     expect(r.status).toBe(403);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "block")).toBe(true);
+    expect(logs.some((l) => l.decision === "block")).toBe(true);
   });
 });
 
@@ -200,15 +212,23 @@ describe("Decision: block", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: charge_paid", () => {
   it("returns 200 with X-PAYMENT-RESPONSE and logs decision=charge_paid", async () => {
-    await seedTenant(makeTenant({
-      hostname: "charge-paid.test.example.com",
-      origin: "https://origin.charge-paid.test.example.com",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "charge-paid.test.example.com",
+        origin: "https://origin.charge-paid.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     const fetchSpy = makePaymentFetchSpy({ verifyValid: true, settleSuccess: true });
 
@@ -226,7 +246,7 @@ describe("Decision: charge_paid", () => {
     expect(r.headers.get("x-payment-response")).not.toBeNull();
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "charge_paid")).toBe(true);
+    expect(logs.some((l) => l.decision === "charge_paid")).toBe(true);
   });
 });
 
@@ -235,15 +255,23 @@ describe("Decision: charge_paid", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: charge_no_payment", () => {
   it("returns 402 with no X-PAYMENT and logs decision=charge_no_payment", async () => {
-    await seedTenant(makeTenant({
-      hostname: "charge-nopay.test.example.com",
-      origin: "https://origin.charge-nopay.test.example.com",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "charge-nopay.test.example.com",
+        origin: "https://origin.charge-nopay.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -256,7 +284,7 @@ describe("Decision: charge_no_payment", () => {
     expect(r.status).toBe(402);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "charge_no_payment")).toBe(true);
+    expect(logs.some((l) => l.decision === "charge_no_payment")).toBe(true);
   });
 });
 
@@ -265,15 +293,23 @@ describe("Decision: charge_no_payment", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: charge_verify_failed", () => {
   it("returns 402 with invalid reason and logs decision=charge_verify_failed", async () => {
-    await seedTenant(makeTenant({
-      hostname: "charge-verifyfail.test.example.com",
-      origin: "https://origin.charge-verifyfail.test.example.com",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "charge-verifyfail.test.example.com",
+        origin: "https://origin.charge-verifyfail.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     const fetchSpy = makePaymentFetchSpy({ verifyValid: false, verifyReason: "amount_mismatch" });
 
@@ -290,7 +326,7 @@ describe("Decision: charge_verify_failed", () => {
     expect(r.status).toBe(402);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "charge_verify_failed")).toBe(true);
+    expect(logs.some((l) => l.decision === "charge_verify_failed")).toBe(true);
   });
 });
 
@@ -299,18 +335,30 @@ describe("Decision: charge_verify_failed", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: charge_origin_failed", () => {
   it("logs decision=charge_origin_failed when origin returns 5xx after verify ok", async () => {
-    await seedTenant(makeTenant({
-      hostname: "charge-originfail.test.example.com",
-      origin: "https://origin.charge-originfail.test.example.com",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "charge-originfail.test.example.com",
+        origin: "https://origin.charge-originfail.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     // Verify succeeds but origin returns 500
-    const fetchSpy = makePaymentFetchSpy({ verifyValid: true, originStatus: 500, originBody: "server error" });
+    const fetchSpy = makePaymentFetchSpy({
+      verifyValid: true,
+      originStatus: 500,
+      originBody: "server error",
+    });
 
     const req = await agentRequest("https://charge-originfail.test.example.com/foo", {
       "x-payment": "mock-payment-header",
@@ -325,14 +373,16 @@ describe("Decision: charge_origin_failed", () => {
 
     // Payment-integrity guard: settle MUST NOT be called when origin failed.
     const settleCalls = fetchSpy.mock.calls.filter(([input]) =>
-      String(typeof input === "string" ? input : (input as Request).url).startsWith("https://x402.org/facilitator/settle"),
+      String(typeof input === "string" ? input : (input as Request).url).startsWith(
+        "https://x402.org/facilitator/settle",
+      ),
     );
     expect(settleCalls.length).toBe(0);
 
     fetchSpy.mockRestore();
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "charge_origin_failed")).toBe(true);
+    expect(logs.some((l) => l.decision === "charge_origin_failed")).toBe(true);
   });
 });
 
@@ -341,15 +391,23 @@ describe("Decision: charge_origin_failed", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: charge_unsettled", () => {
   it("logs decision=charge_unsettled when settle returns failure after successful verify+origin", async () => {
-    await seedTenant(makeTenant({
-      hostname: "charge-unsettled.test.example.com",
-      origin: "https://origin.charge-unsettled.test.example.com",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "charge-unsettled.test.example.com",
+        origin: "https://origin.charge-unsettled.test.example.com",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     // Verify ok, origin 200, settle fails
     const fetchSpy = makePaymentFetchSpy({
@@ -376,7 +434,7 @@ describe("Decision: charge_unsettled", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "charge_unsettled")).toBe(true);
+    expect(logs.some((l) => l.decision === "charge_unsettled")).toBe(true);
   });
 });
 
@@ -385,16 +443,18 @@ describe("Decision: charge_unsettled", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: default_allow", () => {
   it("forwards to origin and logs decision=default_allow when no rules match and default=allow", async () => {
-    await seedTenant(makeTenant({
-      hostname: "default-allow.test.example.com",
-      origin: "https://origin.default-allow.test.example.com",
-      default_action: "allow",
-      pricing_rules: [], // no rules
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("default allowed", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "default-allow.test.example.com",
+        origin: "https://origin.default-allow.test.example.com",
+        default_action: "allow",
+        pricing_rules: [], // no rules
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("default allowed", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -409,7 +469,7 @@ describe("Decision: default_allow", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "default_allow")).toBe(true);
+    expect(logs.some((l) => l.decision === "default_allow")).toBe(true);
   });
 });
 
@@ -418,20 +478,27 @@ describe("Decision: default_allow", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: would_allow", () => {
   it("forwards to origin and logs decision=would_allow for log_only tenant with allow rule", async () => {
-    await seedTenant(makeTenant({
-      hostname: "would-allow.test.example.com",
-      origin: "https://origin.would-allow.test.example.com",
-      status: "log_only",
-      pricing_rules: [{
-        id: "r-allow", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "allow", enabled: true,
-      }],
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("log only allow", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "would-allow.test.example.com",
+        origin: "https://origin.would-allow.test.example.com",
+        status: "log_only",
+        pricing_rules: [
+          {
+            id: "r-allow",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "allow",
+            enabled: true,
+          },
+        ],
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("log only allow", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -446,7 +513,7 @@ describe("Decision: would_allow", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "would_allow")).toBe(true);
+    expect(logs.some((l) => l.decision === "would_allow")).toBe(true);
   });
 });
 
@@ -455,20 +522,27 @@ describe("Decision: would_allow", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: would_block", () => {
   it("forwards to origin and logs decision=would_block for log_only tenant with block rule", async () => {
-    await seedTenant(makeTenant({
-      hostname: "would-block.test.example.com",
-      origin: "https://origin.would-block.test.example.com",
-      status: "log_only",
-      pricing_rules: [{
-        id: "r-block", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "block", enabled: true,
-      }],
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("would have blocked", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "would-block.test.example.com",
+        origin: "https://origin.would-block.test.example.com",
+        status: "log_only",
+        pricing_rules: [
+          {
+            id: "r-block",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "block",
+            enabled: true,
+          },
+        ],
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("would have blocked", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -484,7 +558,7 @@ describe("Decision: would_block", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "would_block")).toBe(true);
+    expect(logs.some((l) => l.decision === "would_block")).toBe(true);
   });
 });
 
@@ -493,20 +567,28 @@ describe("Decision: would_block", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: would_charge_no_payment", () => {
   it("forwards to origin and logs decision=would_charge_no_payment for log_only tenant with charge rule and no payment", async () => {
-    await seedTenant(makeTenant({
-      hostname: "would-charge-nopay.test.example.com",
-      origin: "https://origin.would-charge-nopay.test.example.com",
-      status: "log_only",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("would have charged", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "would-charge-nopay.test.example.com",
+        origin: "https://origin.would-charge-nopay.test.example.com",
+        status: "log_only",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("would have charged", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -521,7 +603,7 @@ describe("Decision: would_charge_no_payment", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "would_charge_no_payment")).toBe(true);
+    expect(logs.some((l) => l.decision === "would_charge_no_payment")).toBe(true);
   });
 });
 
@@ -530,16 +612,24 @@ describe("Decision: would_charge_no_payment", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: would_charge_paid", () => {
   it("forwards to origin and logs decision=would_charge_paid for log_only with valid X-PAYMENT", async () => {
-    await seedTenant(makeTenant({
-      hostname: "would-charge-paid.test.example.com",
-      origin: "https://origin.would-charge-paid.test.example.com",
-      status: "log_only",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "would-charge-paid.test.example.com",
+        origin: "https://origin.would-charge-paid.test.example.com",
+        status: "log_only",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     const fetchSpy = makePaymentFetchSpy({ verifyValid: true, originStatus: 200 });
 
@@ -556,7 +646,7 @@ describe("Decision: would_charge_paid", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "would_charge_paid")).toBe(true);
+    expect(logs.some((l) => l.decision === "would_charge_paid")).toBe(true);
   });
 });
 
@@ -565,16 +655,24 @@ describe("Decision: would_charge_paid", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: would_charge_verify_failed", () => {
   it("forwards to origin and logs decision=would_charge_verify_failed for log_only with bad payment", async () => {
-    await seedTenant(makeTenant({
-      hostname: "would-charge-verifyfail.test.example.com",
-      origin: "https://origin.would-charge-verifyfail.test.example.com",
-      status: "log_only",
-      pricing_rules: [{
-        id: "r-charge", priority: 1,
-        path_pattern: "*", agent_pattern: "*",
-        action: "charge", price_usdc: "0.01", enabled: true,
-      }],
-    }));
+    await seedTenant(
+      makeTenant({
+        hostname: "would-charge-verifyfail.test.example.com",
+        origin: "https://origin.would-charge-verifyfail.test.example.com",
+        status: "log_only",
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
 
     const fetchSpy = makePaymentFetchSpy({
       verifyValid: false,
@@ -595,7 +693,7 @@ describe("Decision: would_charge_verify_failed", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "would_charge_verify_failed")).toBe(true);
+    expect(logs.some((l) => l.decision === "would_charge_verify_failed")).toBe(true);
   });
 });
 
@@ -604,17 +702,19 @@ describe("Decision: would_charge_verify_failed", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: would_default_allow", () => {
   it("forwards to origin and logs decision=would_default_allow for log_only with no rules", async () => {
-    await seedTenant(makeTenant({
-      hostname: "would-default-allow.test.example.com",
-      origin: "https://origin.would-default-allow.test.example.com",
-      status: "log_only",
-      default_action: "allow",
-      pricing_rules: [],
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("would default allow", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "would-default-allow.test.example.com",
+        origin: "https://origin.would-default-allow.test.example.com",
+        status: "log_only",
+        default_action: "allow",
+        pricing_rules: [],
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("would default allow", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -629,7 +729,7 @@ describe("Decision: would_default_allow", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "would_default_allow")).toBe(true);
+    expect(logs.some((l) => l.decision === "would_default_allow")).toBe(true);
   });
 });
 
@@ -638,15 +738,17 @@ describe("Decision: would_default_allow", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: status_paused", () => {
   it("forwards to origin and logs decision=status_paused for paused_by_publisher tenant", async () => {
-    await seedTenant(makeTenant({
-      hostname: "status-paused.test.example.com",
-      origin: "https://origin.status-paused.test.example.com",
-      status: "paused_by_publisher",
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("paused origin", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "status-paused.test.example.com",
+        origin: "https://origin.status-paused.test.example.com",
+        status: "paused_by_publisher",
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("paused origin", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -661,7 +763,7 @@ describe("Decision: status_paused", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "status_paused")).toBe(true);
+    expect(logs.some((l) => l.decision === "status_paused")).toBe(true);
   });
 });
 
@@ -670,15 +772,17 @@ describe("Decision: status_paused", () => {
 // ---------------------------------------------------------------------------
 describe("Decision: status_suspended", () => {
   it("forwards to origin and logs decision=status_suspended for suspended_by_paperward tenant", async () => {
-    await seedTenant(makeTenant({
-      hostname: "status-suspended.test.example.com",
-      origin: "https://origin.status-suspended.test.example.com",
-      status: "suspended_by_paperward",
-    }));
-
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("suspended origin", { status: 200 }),
+    await seedTenant(
+      makeTenant({
+        hostname: "status-suspended.test.example.com",
+        origin: "https://origin.status-suspended.test.example.com",
+        status: "suspended_by_paperward",
+      }),
     );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("suspended origin", { status: 200 }));
 
     const ctx = createExecutionContext();
     const r = await worker.fetch(
@@ -693,7 +797,7 @@ describe("Decision: status_suspended", () => {
     expect(r.status).toBe(200);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "status_suspended")).toBe(true);
+    expect(logs.some((l) => l.decision === "status_suspended")).toBe(true);
   });
 });
 
@@ -713,6 +817,6 @@ describe("Decision: tenant_unknown", () => {
     expect(r.status).toBe(503);
 
     const logs = await readLogs();
-    expect(logs.some(l => l.decision === "tenant_unknown")).toBe(true);
+    expect(logs.some((l) => l.decision === "tenant_unknown")).toBe(true);
   });
 });
