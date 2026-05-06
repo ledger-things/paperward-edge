@@ -89,6 +89,49 @@ function validateTenantInput(body: unknown): ValidationResult {
   if (!Array.isArray(b.pricing_rules)) {
     return { ok: false, reason: "pricing_rules must be an array" };
   }
+  // C2: validate origin is a valid HTTPS URL
+  const originStr = b.origin as string;
+  let parsedOrigin: URL;
+  try {
+    parsedOrigin = new URL(originStr);
+  } catch {
+    return { ok: false, reason: "origin is not a valid URL" };
+  }
+  if (parsedOrigin.protocol !== "https:") {
+    return { ok: false, reason: "origin must use HTTPS" };
+  }
+  // C1: validate each pricing rule
+  const VALID_ACTIONS = new Set(["charge", "allow", "block"]);
+  for (const rule of b.pricing_rules as unknown[]) {
+    if (!rule || typeof rule !== "object") {
+      return { ok: false, reason: "each pricing rule must be an object" };
+    }
+    const r = rule as Record<string, unknown>;
+    const ruleId = typeof r.id === "string" ? r.id : "(unknown)";
+    if (typeof r.id !== "string" || r.id === "") {
+      return { ok: false, reason: `rule ${ruleId}: id must be a non-empty string` };
+    }
+    if (typeof r.path_pattern !== "string" || r.path_pattern === "") {
+      return { ok: false, reason: `rule ${ruleId}: path_pattern must be a non-empty string` };
+    }
+    if (typeof r.agent_pattern !== "string" || r.agent_pattern === "") {
+      return { ok: false, reason: `rule ${ruleId}: agent_pattern must be a non-empty string` };
+    }
+    if (!VALID_ACTIONS.has(r.action as string)) {
+      return { ok: false, reason: `rule ${ruleId}: action must be one of "charge", "allow", "block"` };
+    }
+    if (typeof r.enabled !== "boolean") {
+      return { ok: false, reason: `rule ${ruleId}: enabled must be a boolean` };
+    }
+    if (typeof r.priority !== "number" || !Number.isFinite(r.priority)) {
+      return { ok: false, reason: `rule ${ruleId}: priority must be a finite number` };
+    }
+    if (r.action === "charge") {
+      if (typeof r.price_usdc !== "string" || r.price_usdc === "") {
+        return { ok: false, reason: `rule ${ruleId}: price_usdc must be a non-empty string for charge rules` };
+      }
+    }
+  }
   return {
     ok: true,
     config: {
