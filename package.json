@@ -38,6 +38,6 @@
     "viem": "^2.48.8",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^2.0.0",
-    "wrangler": "^3.80.0"
+    "wrangler": "^4.88.0"
   }
 }
