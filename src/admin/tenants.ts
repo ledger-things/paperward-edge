@@ -36,7 +36,7 @@ export function buildAdminTenantRoutes() {
   });
 
   app.put("/tenants/:hostname", async (c) => {
-    const hostname = c.req.param("hostname");
+    const hostname = c.req.param("hostname").toLowerCase();
     const raw = await c.env.KV_DOMAINS.get(`domains:${hostname}`);
     if (raw === null) return c.text("not found", 404);
     const before = JSON.parse(raw) as TenantConfig;
@@ -59,7 +59,7 @@ export function buildAdminTenantRoutes() {
   });
 
   app.get("/tenants/:hostname", async (c) => {
-    const hostname = c.req.param("hostname");
+    const hostname = c.req.param("hostname").toLowerCase();
     const raw = await c.env.KV_DOMAINS.get(`domains:${hostname}`);
     if (raw === null) return c.text("not found", 404);
     return c.json(JSON.parse(raw), 200);
@@ -136,7 +136,7 @@ function validateTenantInput(body: unknown): ValidationResult {
     ok: true,
     config: {
       tenant_id: b.tenant_id as string,
-      hostname: b.hostname as string,
+      hostname: (b.hostname as string).toLowerCase(),
       origin: b.origin as string,
       status: b.status as TenantConfig["status"],
       default_action: b.default_action as TenantConfig["default_action"],

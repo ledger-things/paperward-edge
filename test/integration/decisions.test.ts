@@ -320,10 +320,16 @@ describe("Decision: charge_origin_failed", () => {
     const r = await worker.fetch(req, env as any, ctx);
     await waitOnExecutionContext(ctx);
 
-    fetchSpy.mockRestore();
-
     // The origin response (500) is forwarded; paywall does not settle on origin failure.
     expect(r.status).toBe(500);
+
+    // Payment-integrity guard: settle MUST NOT be called when origin failed.
+    const settleCalls = fetchSpy.mock.calls.filter(([input]) =>
+      String(typeof input === "string" ? input : (input as Request).url).startsWith("https://x402.org/facilitator/settle"),
+    );
+    expect(settleCalls.length).toBe(0);
+
+    fetchSpy.mockRestore();
 
     const logs = await readLogs();
     expect(logs.some(l => l.decision === "charge_origin_failed")).toBe(true);

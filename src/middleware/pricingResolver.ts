@@ -73,7 +73,29 @@ export const pricingResolverMiddleware: MiddlewareHandler<{ Bindings: Env; Varia
     return;
   }
   const path = new URL(c.req.url).pathname;
-  const decision = resolvePricing(tenant, c.var.detection, path);
+
+  // Spec §10.5: pricing resolver throws → fail open; log + Sentry; fall back to default_action.
+  // resolvePricing is pure and currently can't throw on well-formed data, but the contract
+  // requires defensive handling so future grammar extensions don't change failure semantics.
+  let decision: DecisionState;
+  try {
+    decision = resolvePricing(tenant, c.var.detection, path);
+  } catch (err) {
+    console.error(JSON.stringify({ at: "pricingResolverMiddleware", event: "resolve_threw", err: String(err) }));
+    c.var.sentry?.captureException(err);
+    const def = tenant.default_action;
+    decision = {
+      decision:
+        tenant.status === "log_only"
+          ? def === "allow" ? "would_default_allow" : "would_block"
+          : def === "allow" ? "default_allow" : "block",
+      decision_reason: "resolver_threw",
+      rule_id: null,
+      price_usdc: null,
+      paid: false,
+      payment_tx: null,
+    };
+  }
   c.set("decision_state", decision);
 
   // Enforce block decisions immediately — do not forward to origin.
