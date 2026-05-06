@@ -21,7 +21,7 @@ import { buildPaywallMiddleware } from "@/middleware/paywall";
 import { buildOriginForwarder } from "@/middleware/originForwarder";
 import { buildDetectorRegistry } from "@/detectors/registry";
 import type { Detector } from "@/detectors/types";
-import { buildFacilitatorRegistry, networkForEnv } from "@/facilitators/registry";
+import { buildFacilitatorRegistry } from "@/facilitators/registry";
 import type { Facilitator } from "@/facilitators/types";
 
 // Build SHA injected at build time. wrangler can substitute via define; for v0,
@@ -47,10 +47,20 @@ export function _resetDetectorsCache(): void {
 let facilitatorsCache: Map<string, Facilitator> | null = null;
 function facilitatorsFor(env: Env): Map<string, Facilitator> {
   if (!facilitatorsCache) {
-    const deps =
-      env.COINBASE_FACILITATOR_KEY !== undefined
-        ? { network: networkForEnv(env.ENV), coinbaseApiKey: env.COINBASE_FACILITATOR_KEY }
-        : { network: networkForEnv(env.ENV) };
+    const deps: Parameters<typeof buildFacilitatorRegistry>[0] = { env: env.ENV };
+    if (env.COINBASE_FACILITATOR_KEY !== undefined) {
+      deps.coinbaseApiKey = env.COINBASE_FACILITATOR_KEY;
+    }
+    if (
+      env.SOLANA_FACILITATOR_URL !== undefined &&
+      env.SOLANA_FACILITATOR_FEE_PAYER !== undefined
+    ) {
+      deps.solanaFacilitatorUrl = env.SOLANA_FACILITATOR_URL;
+      deps.solanaFeePayer = env.SOLANA_FACILITATOR_FEE_PAYER;
+      if (env.SOLANA_FACILITATOR_API_KEY !== undefined) {
+        deps.solanaApiKey = env.SOLANA_FACILITATOR_API_KEY;
+      }
+    }
     facilitatorsCache = buildFacilitatorRegistry(deps);
   }
   return facilitatorsCache;

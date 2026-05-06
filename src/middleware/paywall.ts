@@ -2,18 +2,15 @@
 //
 // Paywall middleware. Implements spec §5.4 (pre-origin) and §5.6 (post-origin).
 //
-// The middleware honors active and log_only statuses. It is a no-op for
-// pause/suspended (those don't reach a charge decision because tenantResolver
-// has already set status_paused/status_suspended).
+// Multi-rail support: a tenant declares an `accepted_facilitators` list, each
+// entry identifying a facilitator and the chain-appropriate payout address.
+//   • On no X-PAYMENT: build a 402 with one `accepts[]` entry per accepted rail.
+//   • On X-PAYMENT present: parse the inbound payload, read its `accepted.network`
+//     field, and dispatch verify/settle to the matching facilitator.
 //
-// State transitions on c.var.decision_state:
-//   initial:  charge_no_payment (or would_charge_no_payment in log_only)
-//   pre-next: → charge_verify_failed if verify rejects
-//             → 503 if facilitator unreachable (active mode)
-//             → continues with verify_result attached if verify ok
-//   originForwarder may set charge_origin_failed
-//   post-next: charge_no_payment + verify_result + origin_2xx → charge_paid (settle ok)
-//                                                              → charge_unsettled (settle fail)
+// State transitions on c.var.decision_state are unchanged from the single-rail
+// design; the only new failure mode is `charge_verify_failed` with reason
+// `unsupported_network` when an agent pays on a rail the tenant didn't accept.
 
 import type { MiddlewareHandler } from "hono";
 import type { Env, Vars } from "@/types";
@@ -23,7 +20,10 @@ import type {
   SettleResult,
   VerifyResult,
 } from "@/facilitators/types";
+import { networkFromX402 } from "@/facilitators/types";
+import type { AcceptedFacilitator } from "@/config/types";
 import { Metrics } from "@/metrics/analytics-engine";
+import { decodePaymentHeader } from "@/facilitators/coinbase-x402";
 
 export function buildPaywallMiddleware(
   getRegistry: (env: Env) => Map<string, Facilitator>,
@@ -39,46 +39,100 @@ export function buildPaywallMiddleware(
     const isCharge =
       ds.decision === "charge_no_payment" || ds.decision === "would_charge_no_payment";
     if (!isCharge) {
-      // not a charge path; let the rest of the pipeline run unmodified
       await next();
       return;
     }
 
-    const facilitator = getRegistry(c.env).get(tenant.facilitator_id);
-    if (!facilitator) {
+    const registry = getRegistry(c.env);
+    const accepted = tenant.accepted_facilitators;
+    if (accepted.length === 0) {
       console.error(
         JSON.stringify({
           at: "paywall",
-          event: "unknown_facilitator",
-          facilitator_id: tenant.facilitator_id,
+          event: "no_accepted_facilitators",
+          tenant_id: tenant.tenant_id,
         }),
       );
-      return c.text("misconfigured tenant", 503);
+      return c.text("misconfigured tenant: no accepted facilitators", 503);
+    }
+
+    // Validate that every accepted facilitator is actually registered.
+    for (const af of accepted) {
+      if (!registry.has(af.facilitator_id)) {
+        console.error(
+          JSON.stringify({
+            at: "paywall",
+            event: "unknown_facilitator",
+            facilitator_id: af.facilitator_id,
+          }),
+        );
+        return c.text("misconfigured tenant: unknown facilitator", 503);
+      }
     }
 
     const metrics = c.env.ANALYTICS ? new Metrics(c.env.ANALYTICS) : null;
-    const facilitator_id = tenant.facilitator_id;
-
-    const requirements: PaymentRequirements = {
-      amount_usdc: ds.price_usdc!,
-      recipient: tenant.payout_address,
-      resource: c.req.url,
-      network: c.env.ENV === "production" ? "base-mainnet" : "base-sepolia",
-    };
-
     const isLogOnly = tenant.status === "log_only";
     const xpayment = c.req.header("x-payment");
 
-    // ── Pre-origin phase ──
+    // ── Pre-origin: no X-PAYMENT → build multi-rail 402 ──
     if (!xpayment) {
       if (isLogOnly) {
-        // log_only with no X-PAYMENT: leave decision = would_charge_no_payment, forward to origin
+        // log_only must not return 402 — forward to origin and log "would_*".
         await next();
         return;
       }
-      // active mode: 402
-      return facilitator.build402(requirements);
+      return buildMultiRail402(c.req.url, tenant.accepted_facilitators, registry, ds.price_usdc!);
     }
+
+    // ── Pre-origin: X-PAYMENT present → pick the right facilitator and verify ──
+    const decoded = decodePaymentHeader(xpayment);
+    const network = readNetworkFromPaymentPayload(decoded);
+    if (!network) {
+      const reason = "malformed_payment_header";
+      if (isLogOnly) {
+        c.set("decision_state", {
+          ...ds,
+          decision: "would_charge_verify_failed",
+          decision_reason: reason,
+        });
+        await next();
+        return;
+      }
+      c.set("decision_state", { ...ds, decision: "charge_verify_failed", decision_reason: reason });
+      return c.text(reason, 400);
+    }
+
+    const match = pickFacilitatorForNetwork(accepted, registry, network);
+    if (!match) {
+      const reason = "unsupported_network";
+      if (isLogOnly) {
+        c.set("decision_state", {
+          ...ds,
+          decision: "would_charge_verify_failed",
+          decision_reason: reason,
+        });
+        await next();
+        return;
+      }
+      c.set("decision_state", { ...ds, decision: "charge_verify_failed", decision_reason: reason });
+      return buildMultiRail402(
+        c.req.url,
+        tenant.accepted_facilitators,
+        registry,
+        ds.price_usdc!,
+        reason,
+      );
+    }
+
+    const { facilitator, accepted: matchedAccepted } = match;
+    const facilitator_id = facilitator.id;
+
+    const requirements: PaymentRequirements = {
+      amount_usdc: ds.price_usdc!,
+      recipient: matchedAccepted.payout_address,
+      resource: c.req.url,
+      network: facilitator.supportedNetworks[0]!, // a facilitator instance is bound to one network
+    };
 
     let verifyResult: VerifyResult;
     try {
@@ -87,9 +141,7 @@ export function buildPaywallMiddleware(
       metrics?.verifyLatency({ facilitator_id, latency_ms: Date.now() - verifyStart });
     } catch (err) {
       console.error(JSON.stringify({ at: "paywall", event: "verify_threw", err: String(err) }));
-      if (!isLogOnly) {
-        c.var.sentry?.captureException(err);
-      }
+      if (!isLogOnly) c.var.sentry?.captureException(err);
       if (isLogOnly) {
         c.set("decision_state", {
           ...ds,
@@ -126,21 +178,19 @@ export function buildPaywallMiddleware(
     if (isLogOnly) {
       c.set("decision_state", { ...ds, decision: "would_charge_paid", decision_reason: null });
       await next();
-      return; // log_only never settles
+      return;
     }
 
     c.set("verify_result", verifyResult);
+    // The same `facilitator` reference is closed over for the post-phase settle call below.
     await next();
 
-    // ── Post-origin phase (active only) ──
+    // ── Post-origin (active only): settle with the same facilitator we verified with ──
     const updated = c.var.decision_state;
-    if (updated.decision === "charge_origin_failed") {
-      // origin failed; do not settle
-      return;
-    }
+    if (updated.decision === "charge_origin_failed") return;
+
     const originStatus = c.var.origin_status;
     if (originStatus === null || originStatus < 200 || originStatus >= 300) {
-      // origin produced a non-2xx that originForwarder didn't already tag; treat as origin failure
       c.set("decision_state", {
         ...updated,
         decision: "charge_origin_failed",
@@ -186,9 +236,6 @@ export function buildPaywallMiddleware(
       payment_tx: settleResult.tx_reference ?? null,
     });
 
-    // Attach X-PAYMENT-RESPONSE to outgoing response.
-    // Hono's c.res is the response from the route handler; we need to clone it
-    // with the additional header.
     const res = c.res;
     const newHeaders = new Headers(res.headers);
     newHeaders.set(
@@ -201,4 +248,101 @@ export function buildPaywallMiddleware(
       headers: newHeaders,
     });
   };
+}
+
+/**
+ * Builds a 402 Response whose `accepts[]` array contains one entry per accepted
+ * facilitator. The agent picks which rail to pay on by looking at the entries
+ * and choosing one its wallet supports.
+ */
+function buildMultiRail402(
+  resourceUrl: string,
+  accepted: AcceptedFacilitator[],
+  registry: Map<string, Facilitator>,
+  amount_usdc: string,
+  error?: string,
+): Response {
+  const acceptsEntries: Array<Record<string, unknown>> = [];
+  for (const af of accepted) {
+    const facilitator = registry.get(af.facilitator_id);
+    if (!facilitator) continue;
+    const network = facilitator.supportedNetworks[0]!;
+    const requirements: PaymentRequirements = {
+      amount_usdc,
+      recipient: af.payout_address,
+      resource: resourceUrl,
+      network,
+    };
+    acceptsEntries.push(buildAcceptsEntryViaFacilitator(facilitator, requirements));
+  }
+
+  const body: Record<string, unknown> = {
+    x402Version: 2,
+    resource: { url: resourceUrl, description: "", mimeType: "application/json" },
+    accepts: acceptsEntries,
+  };
+  if (error !== undefined) body.error = error;
+
+  return new Response(JSON.stringify(body), {
+    status: 402,
+    headers: {
+      "content-type": "application/json",
+      "WWW-Authenticate": "x402",
+    },
+  });
+}
+
+/**
+ * Calls the facilitator's `buildAcceptsEntry` if exposed, falling back to
+ * extracting the entry from a single-facilitator `build402` body. All concrete
+ * facilitators in this codebase expose `buildAcceptsEntry` directly; the
+ * fallback exists only to keep the `Facilitator` interface minimal (no need to
+ * widen it just for the multi-rail case).
+ */
+function buildAcceptsEntryViaFacilitator(
+  facilitator: Facilitator,
+  req: PaymentRequirements,
+): Record<string, unknown> {
+  const f = facilitator as Facilitator & {
+    buildAcceptsEntry?: (req: PaymentRequirements) => Record<string, unknown>;
+  };
+  if (typeof f.buildAcceptsEntry === "function") {
+    return f.buildAcceptsEntry(req);
+  }
+  // Fallback: invoke build402, parse body, return its first accepts entry.
+  // Synchronous extraction isn't possible (Response.json is async), so this
+  // path is a development-time placeholder. In practice every Facilitator
+  // implementation exports buildAcceptsEntry directly.
+  throw new Error(`facilitator ${facilitator.id} does not expose buildAcceptsEntry`);
+}
+
+/** Reads the `accepted.network` field from a decoded x402 v2 PaymentPayload. */
+function readNetworkFromPaymentPayload(decoded: unknown): string | null {
+  if (!decoded || typeof decoded !== "object") return null;
+  const pp = decoded as Record<string, unknown>;
+  const accepted = pp.accepted;
+  if (!accepted || typeof accepted !== "object") return null;
+  const network = (accepted as Record<string, unknown>).network;
+  return typeof network === "string" ? network : null;
+}
+
+/**
+ * Given the wire `network` from an inbound payment, find the accepted-facilitator
+ * entry whose facilitator supports that network.
+ */
+function pickFacilitatorForNetwork(
+  accepted: AcceptedFacilitator[],
+  registry: Map<string, Facilitator>,
+  wireNetwork: string,
+): { facilitator: Facilitator; accepted: AcceptedFacilitator } | null {
+  const friendly = networkFromX402(wireNetwork);
+  if (!friendly) return null;
+  for (const af of accepted) {
+    const fac = registry.get(af.facilitator_id);
+    if (!fac) continue;
+    if (fac.supportedNetworks.includes(friendly)) {
+      return { facilitator: fac, accepted: af };
+    }
+  }
+  return null;
 }

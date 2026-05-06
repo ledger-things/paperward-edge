@@ -11,8 +11,7 @@ const t: TenantConfig = {
   origin: "https://o",
   status: "active",
   default_action: "allow",
-  facilitator_id: "coinbase-x402-base",
-  payout_address: "0x",
+  accepted_facilitators: [{ facilitator_id: "coinbase-x402-base", payout_address: "0x" }],
   pricing_rules: [
     {
       id: "r1",

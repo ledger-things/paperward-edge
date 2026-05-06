@@ -6,6 +6,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Added (2026-05-06)
+
+**Solana payment rail — interoperability with [pay.sh](https://pay.sh).**
+
+- New `SolanaX402Facilitator` (`src/facilitators/solana-x402.ts`). Speaks x402 v2 wire format, calls a configurable hosted Solana facilitator's `/verify` and `/settle` endpoints. No `@solana/web3.js` in the Worker — the facilitator handles all chain interaction (transaction validation per spec §6.2 of `scheme_exact_svm.md`, fee-payer co-signing, broadcast).
+- `TenantConfig` schema breaking change: `facilitator_id: string` + `payout_address: string` replaced with `accepted_facilitators: AcceptedFacilitator[]`. Each tenant now declares one or more accepted rails.
+- Paywall middleware now multi-rail: 402 responses advertise every accepted rail in `accepts[]`; inbound payments are dispatched to the matching facilitator based on the `accepted.network` field.
+- Coinbase (Base) facilitator brought to **x402 v2 wire format** for consistency with the Solana implementation. Network identifiers now use the canonical `eip155:<chainId>` (Base mainnet `eip155:8453`, Sepolia `eip155:84532`) and amounts are micro-USDC integers.
+- Admin endpoint validates per-rail payout-address format (EVM = `0x` + 40 hex; Solana = base58, 32–44 chars).
+- 21 net new tests (151 → 154 total): 12 Coinbase v2, 13 Solana, 2 admin format, 3 multi-rail integration scenarios, minus obsolete duplicates.
+- New env vars: `SOLANA_FACILITATOR_URL`, `SOLANA_FACILITATOR_FEE_PAYER`, `SOLANA_FACILITATOR_API_KEY` (all optional; if URL+feePayer set, the SVM rail registers).
+- Node bumped to ≥22 (already was; no change needed).
+
 ### Added
 
 Initial v0 implementation of the Paperward edge layer.

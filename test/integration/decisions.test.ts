@@ -45,6 +45,16 @@ async function agentRequest(url: string, extraHeaders?: Record<string, string>):
   return signRequest(extraHeaders ? { url, additionalHeaders: extraHeaders } : { url });
 }
 
+/** Build a valid base64-encoded JSON x-payment header for base-sepolia. */
+function xPaymentForBaseSepolia(): string {
+  const payload = {
+    x402Version: 2,
+    accepted: { network: "eip155:84532", scheme: "exact" },
+    payload: { signature: "0xsig", authorization: { from: "0x0", to: "0x0", value: "10000" } },
+  };
+  return btoa(JSON.stringify(payload));
+}
+
 /** Standard fetch spy that handles facilitator + WBA directory + origin calls. */
 function makePaymentFetchSpy(
   opts: {
@@ -233,7 +243,7 @@ describe("Decision: charge_paid", () => {
     const fetchSpy = makePaymentFetchSpy({ verifyValid: true, settleSuccess: true });
 
     const req = await agentRequest("https://charge-paid.test.example.com/foo", {
-      "x-payment": "mock-payment-header",
+      "x-payment": xPaymentForBaseSepolia(),
     });
 
     const ctx = createExecutionContext();
@@ -314,7 +324,7 @@ describe("Decision: charge_verify_failed", () => {
     const fetchSpy = makePaymentFetchSpy({ verifyValid: false, verifyReason: "amount_mismatch" });
 
     const req = await agentRequest("https://charge-verifyfail.test.example.com/foo", {
-      "x-payment": "bad-payment-header",
+      "x-payment": xPaymentForBaseSepolia(),
     });
 
     const ctx = createExecutionContext();
@@ -361,7 +371,7 @@ describe("Decision: charge_origin_failed", () => {
     });
 
     const req = await agentRequest("https://charge-originfail.test.example.com/foo", {
-      "x-payment": "mock-payment-header",
+      "x-payment": xPaymentForBaseSepolia(),
     });
 
     const ctx = createExecutionContext();
@@ -418,7 +428,7 @@ describe("Decision: charge_unsettled", () => {
     });
 
     const req = await agentRequest("https://charge-unsettled.test.example.com/foo", {
-      "x-payment": "mock-payment-header",
+      "x-payment": xPaymentForBaseSepolia(),
     });
 
     const ctx = createExecutionContext();
@@ -634,7 +644,7 @@ describe("Decision: would_charge_paid", () => {
     const fetchSpy = makePaymentFetchSpy({ verifyValid: true, originStatus: 200 });
 
     const req = await agentRequest("https://would-charge-paid.test.example.com/foo", {
-      "x-payment": "mock-payment-header",
+      "x-payment": xPaymentForBaseSepolia(),
     });
 
     const ctx = createExecutionContext();
@@ -681,7 +691,7 @@ describe("Decision: would_charge_verify_failed", () => {
     });
 
     const req = await agentRequest("https://would-charge-verifyfail.test.example.com/foo", {
-      "x-payment": "bad-payment-header",
+      "x-payment": xPaymentForBaseSepolia(),
     });
 
     const ctx = createExecutionContext();
@@ -818,5 +828,187 @@ describe("Decision: tenant_unknown", () => {
 
     const logs = await readLogs();
     expect(logs.some((l) => l.decision === "tenant_unknown")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-rail: tenant accepts both Coinbase (Base) and Solana facilitators.
+// Verifies that the paywall dispatches verify/settle to the right facilitator
+// based on the inbound X-PAYMENT header's `accepted.network` field.
+// ---------------------------------------------------------------------------
+
+/** Build a valid base64-encoded JSON x-payment header for solana-devnet. */
+function xPaymentForSolanaDevnet(): string {
+  const payload = {
+    x402Version: 2,
+    accepted: {
+      network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1O2pu1cLs6Cs",
+      scheme: "exact",
+    },
+    payload: { transaction: "AAAAAAAAAA==" /* fake serialized partially-signed tx */ },
+  };
+  return btoa(JSON.stringify(payload));
+}
+
+describe("Multi-rail: Solana settlement", () => {
+  it("dispatches verify+settle to Solana facilitator when X-PAYMENT advertises a solana network", async () => {
+    await seedTenant(
+      makeTenant({
+        hostname: "multi-rail.test.example.com",
+        origin: "https://origin.multi-rail.test.example.com",
+        accepted_facilitators: [
+          { facilitator_id: "coinbase-x402-base", payout_address: "0xabc" },
+          {
+            facilitator_id: "x402-solana-devnet",
+            payout_address: "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4",
+          },
+        ],
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
+
+    let solanaVerifyCalls = 0;
+    let solanaSettleCalls = 0;
+    let coinbaseCalls = 0;
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(typeof input === "string" ? input : (input as Request).url);
+      if (url.includes("/.well-known/http-message-signatures-directory")) {
+        return new Response(JSON.stringify(FIXTURE_DIRECTORY), { status: 200 });
+      }
+      if (url.startsWith("https://x402.org/facilitator/")) {
+        coinbaseCalls++;
+        return new Response(JSON.stringify({ isValid: true }), { status: 200 });
+      }
+      if (url.startsWith("https://facilitator.example.test/verify")) {
+        solanaVerifyCalls++;
+        return new Response(JSON.stringify({ isValid: true, payer: "8Pkst9Bp..." }), {
+          status: 200,
+        });
+      }
+      if (url.startsWith("https://facilitator.example.test/settle")) {
+        solanaSettleCalls++;
+        return new Response(JSON.stringify({ success: true, transaction: "5h7TsSolanaSig..." }), {
+          status: 200,
+        });
+      }
+      return new Response("origin content", { status: 200 });
+    });
+
+    const req = await agentRequest("https://multi-rail.test.example.com/foo", {
+      "x-payment": xPaymentForSolanaDevnet(),
+    });
+
+    const ctx = createExecutionContext();
+    const r = await worker.fetch(req, env as any, ctx);
+    await waitOnExecutionContext(ctx);
+
+    fetchSpy.mockRestore();
+
+    expect(r.status).toBe(200);
+    expect(solanaVerifyCalls).toBe(1);
+    expect(solanaSettleCalls).toBe(1);
+    expect(coinbaseCalls).toBe(0); // Coinbase facilitator NOT called for a Solana payment
+
+    const logs = await readLogs();
+    expect(logs.some((l) => l.decision === "charge_paid")).toBe(true);
+  });
+
+  it("returns 402 with both rails advertised when no X-PAYMENT is present", async () => {
+    await seedTenant(
+      makeTenant({
+        hostname: "multi-rail-402.test.example.com",
+        origin: "https://origin.multi-rail-402.test.example.com",
+        accepted_facilitators: [
+          { facilitator_id: "coinbase-x402-base", payout_address: "0xabc" },
+          {
+            facilitator_id: "x402-solana-devnet",
+            payout_address: "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4",
+          },
+        ],
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("nope", { status: 200 }));
+
+    const req = await agentRequest("https://multi-rail-402.test.example.com/foo");
+    const ctx = createExecutionContext();
+    const r = await worker.fetch(req, env as any, ctx);
+    await waitOnExecutionContext(ctx);
+
+    fetchSpy.mockRestore();
+
+    expect(r.status).toBe(402);
+    const body = (await r.json()) as Record<string, unknown>;
+    const accepts = body.accepts as Array<Record<string, unknown>>;
+    expect(accepts.length).toBe(2);
+    const networks = accepts.map((a) => a.network);
+    expect(networks).toContain("eip155:84532");
+    expect(networks).toContain("solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1O2pu1cLs6Cs");
+  });
+
+  it("returns charge_verify_failed/unsupported_network when agent pays on a rail the tenant doesn't accept", async () => {
+    await seedTenant(
+      makeTenant({
+        hostname: "single-rail-base.test.example.com",
+        origin: "https://origin.single-rail-base.test.example.com",
+        accepted_facilitators: [{ facilitator_id: "coinbase-x402-base", payout_address: "0xabc" }],
+        pricing_rules: [
+          {
+            id: "r-charge",
+            priority: 1,
+            path_pattern: "*",
+            agent_pattern: "*",
+            action: "charge",
+            price_usdc: "0.01",
+            enabled: true,
+          },
+        ],
+      }),
+    );
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("origin", { status: 200 }));
+
+    const req = await agentRequest("https://single-rail-base.test.example.com/foo", {
+      "x-payment": xPaymentForSolanaDevnet(), // Solana payment to a Base-only tenant
+    });
+
+    const ctx = createExecutionContext();
+    const r = await worker.fetch(req, env as any, ctx);
+    await waitOnExecutionContext(ctx);
+
+    fetchSpy.mockRestore();
+
+    expect(r.status).toBe(402);
+    const logs = await readLogs();
+    const failedLog = logs.find(
+      (l) => l.decision === "charge_verify_failed" && l.decision_reason === "unsupported_network",
+    );
+    expect(failedLog).toBeDefined();
   });
 });

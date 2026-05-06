@@ -17,12 +17,15 @@ const t: TenantConfig = {
   origin: "https://o",
   status: "active",
   default_action: "allow",
-  facilitator_id: "coinbase-x402-base",
-  payout_address: "0xabc",
+  accepted_facilitators: [{ facilitator_id: "coinbase-x402-base", payout_address: "0xabc" }],
   pricing_rules: [],
   config_version: 1,
   created_at: "x",
   updated_at: "x",
+};
+
+type FacWithAccepts = Facilitator & {
+  buildAcceptsEntry: (r: PaymentRequirements) => Record<string, unknown>;
 };
 
 function fac(opts: {
@@ -30,9 +33,10 @@ function fac(opts: {
   verifyThrows?: Error;
   settle?: SettleResult;
   settleThrows?: Error;
-}): Facilitator {
+}): FacWithAccepts {
   return {
     id: "coinbase-x402-base",
+    supportedNetworks: ["base-sepolia"] as const,
     build402: (req: PaymentRequirements, error?: string) =>
       new Response(
         JSON.stringify({ accepts: [{ resource: req.resource, payTo: req.recipient, error }] }),
@@ -41,6 +45,11 @@ function fac(opts: {
           headers: { "WWW-Authenticate": "x402", "content-type": "application/json" },
         },
       ),
+    buildAcceptsEntry: (r: PaymentRequirements) => ({
+      scheme: "exact",
+      network: r.network,
+      payTo: r.recipient,
+    }),
     verify: vi.fn(async () => {
       if (opts.verifyThrows) throw opts.verifyThrows;
       if (typeof opts.verify === "function") return opts.verify();
@@ -51,6 +60,16 @@ function fac(opts: {
       return opts.settle ?? { success: true, tx_reference: "0xtx" };
     }),
   };
+}
+
+/** Build a valid base64-encoded JSON X-PAYMENT for base-sepolia. */
+function xPaymentForBaseSepolia(): string {
+  const payload = {
+    x402Version: 2,
+    accepted: { network: "eip155:84532", scheme: "exact" },
+    payload: { signature: "0xsig" },
+  };
+  return btoa(JSON.stringify(payload));
 }
 
 const initialChargeState = {
@@ -84,7 +103,9 @@ describe("paywall (active mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     const { response, vars } = await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: t,
@@ -101,7 +122,9 @@ describe("paywall (active mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     const { response, vars } = await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: t,
@@ -122,7 +145,9 @@ describe("paywall (active mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     const { response, vars } = await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: t,
@@ -145,7 +170,9 @@ describe("paywall (active mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     const { vars } = await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: t,
@@ -165,7 +192,9 @@ describe("paywall (active mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: t,
@@ -216,7 +245,9 @@ describe("paywall (log_only mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     const { vars } = await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: tlog,
@@ -232,7 +263,9 @@ describe("paywall (log_only mode)", () => {
     const mw = buildPaywallMiddleware(() => new Map([[f.id, f]]));
     const { vars } = await runMiddleware(
       mw,
-      new Request("https://blog.example.com/x", { headers: { "x-payment": "abc" } }),
+      new Request("https://blog.example.com/x", {
+        headers: { "x-payment": xPaymentForBaseSepolia() },
+      }),
       {},
       {
         tenant: tlog,

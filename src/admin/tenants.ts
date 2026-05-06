@@ -80,15 +80,7 @@ type ValidationResult =
 function validateTenantInput(body: unknown): ValidationResult {
   if (!body || typeof body !== "object") return { ok: false, reason: "body must be a JSON object" };
   const b = body as Record<string, unknown>;
-  for (const k of [
-    "tenant_id",
-    "hostname",
-    "origin",
-    "status",
-    "default_action",
-    "facilitator_id",
-    "payout_address",
-  ]) {
+  for (const k of ["tenant_id", "hostname", "origin", "status", "default_action"]) {
     if (typeof b[k] !== "string")
       return { ok: false, reason: `field ${k} required and must be a string` };
   }
@@ -105,7 +97,7 @@ function validateTenantInput(body: unknown): ValidationResult {
   if (!Array.isArray(b.pricing_rules)) {
     return { ok: false, reason: "pricing_rules must be an array" };
   }
-  // C2: validate origin is a valid HTTPS URL
+  // Validate origin is a valid HTTPS URL
   const originStr = b.origin as string;
   let parsedOrigin: URL;
   try {
@@ -116,7 +108,40 @@ function validateTenantInput(body: unknown): ValidationResult {
   if (parsedOrigin.protocol !== "https:") {
     return { ok: false, reason: "origin must use HTTPS" };
   }
-  // C1: validate each pricing rule
+  // Validate accepted_facilitators array (multi-rail support)
+  if (!Array.isArray(b.accepted_facilitators) || b.accepted_facilitators.length === 0) {
+    return {
+      ok: false,
+      reason: "accepted_facilitators must be a non-empty array",
+    };
+  }
+  for (const af of b.accepted_facilitators as unknown[]) {
+    if (!af || typeof af !== "object") {
+      return { ok: false, reason: "each accepted_facilitators entry must be an object" };
+    }
+    const a = af as Record<string, unknown>;
+    if (typeof a.facilitator_id !== "string" || a.facilitator_id === "") {
+      return { ok: false, reason: "accepted_facilitators[].facilitator_id required" };
+    }
+    if (typeof a.payout_address !== "string" || a.payout_address === "") {
+      return { ok: false, reason: "accepted_facilitators[].payout_address required" };
+    }
+    // Light format check: EVM = 0x + 40 hex; SVM = base58 32-44 chars (no 0x).
+    const isEvm = a.payout_address.startsWith("0x");
+    if (isEvm && !/^0x[0-9a-fA-F]{40}$/.test(a.payout_address)) {
+      return {
+        ok: false,
+        reason: `accepted_facilitators[${a.facilitator_id}]: invalid EVM address`,
+      };
+    }
+    if (!isEvm && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.payout_address)) {
+      return {
+        ok: false,
+        reason: `accepted_facilitators[${a.facilitator_id}]: invalid base58 address`,
+      };
+    }
+  }
+  // Validate each pricing rule
   const VALID_ACTIONS = new Set(["charge", "allow", "block"]);
   for (const rule of b.pricing_rules as unknown[]) {
     if (!rule || typeof rule !== "object") {
@@ -162,8 +187,7 @@ function validateTenantInput(body: unknown): ValidationResult {
       origin: b.origin as string,
       status: b.status as TenantConfig["status"],
       default_action: b.default_action as TenantConfig["default_action"],
-      facilitator_id: b.facilitator_id as string,
-      payout_address: b.payout_address as string,
+      accepted_facilitators: b.accepted_facilitators as TenantConfig["accepted_facilitators"],
       pricing_rules: b.pricing_rules as TenantConfig["pricing_rules"],
     },
   };

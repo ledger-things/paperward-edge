@@ -14,6 +14,20 @@ export type PricingRule = {
   enabled: boolean;
 };
 
+/**
+ * One accepted payment rail for a tenant. A tenant can configure multiple of
+ * these — the 402 response will advertise all of them and the paywall middleware
+ * dispatches to the correct facilitator based on the inbound X-PAYMENT header's
+ * network.
+ *
+ * `payout_address` is chain-appropriate format (hex 0x... for EVM, base58 for SVM)
+ * and validated at admin write time to match the facilitator's expected shape.
+ */
+export type AcceptedFacilitator = {
+  facilitator_id: string;
+  payout_address: string;
+};
+
 export type TenantConfig = {
   schema_version: 1;
   tenant_id: string;
@@ -21,8 +35,8 @@ export type TenantConfig = {
   origin: string;
   status: TenantStatus;
   default_action: "allow" | "block";
-  facilitator_id: string;
-  payout_address: string;
+  /** Multi-rail support: one or more facilitator+payout pairs the tenant accepts. */
+  accepted_facilitators: AcceptedFacilitator[];
   pricing_rules: PricingRule[];
   config_version: number;
   created_at: string;

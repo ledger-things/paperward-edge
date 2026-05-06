@@ -19,6 +19,12 @@ export type Env = {
   ADMIN_TOKEN: string;
   SENTRY_DSN: string;
   COINBASE_FACILITATOR_KEY?: string;
+  /** Optional Solana x402 facilitator URL; with SOLANA_FACILITATOR_FEE_PAYER, registers the SVM rail. */
+  SOLANA_FACILITATOR_URL?: string;
+  /** Pubkey of the Solana facilitator (advertised as `feePayer` in 402 responses). */
+  SOLANA_FACILITATOR_FEE_PAYER?: string;
+  /** Optional API key for the Solana facilitator. */
+  SOLANA_FACILITATOR_API_KEY?: string;
 
   // Bindings
   KV_DOMAINS: KVNamespace;
