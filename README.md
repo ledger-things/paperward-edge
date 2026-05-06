@@ -1,63 +1,144 @@
 # Paperward Edge
 
-The open-source edge layer of [Paperward](./PRD.md) — an agent-payments platform for SMB publishers. This Cloudflare Worker detects AI agent traffic via [Web Bot Auth](https://datatracker.ietf.org/doc/draft-ietf-web-bot-auth-architecture/) and charges per-fetch via [x402](https://www.x402.org/), then forwards traffic to publisher origins.
+[![CI](https://github.com/ledger-things/paperward-edge/actions/workflows/ci.yml/badge.svg)](https://github.com/ledger-things/paperward-edge/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ledger-things/paperward-edge/actions/workflows/codeql.yml/badge.svg)](https://github.com/ledger-things/paperward-edge/actions/workflows/codeql.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](./.nvmrc)
+[![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)](./tsconfig.json)
+[![Biome](https://img.shields.io/badge/lint-biome-60a5fa.svg)](https://biomejs.dev/)
 
-**Status:** Pre-v0; under active development.
+> The open-source edge layer of [Paperward](./PRD.md) — an agent-payments platform for SMB publishers.
 
-**License:** Apache 2.0. The "Paperward" name and brand are service marks; code is forkable, the brand is not.
+A Cloudflare Worker that fronts a publisher's origin, identifies AI agent traffic via [Web Bot Auth (RFC 9421)](https://datatracker.ietf.org/doc/draft-ietf-web-bot-auth-architecture/), charges per-fetch via [x402](https://www.x402.org/) (USDC on Base), and forwards approved traffic to the origin.
+
+**Status:** Pre-v0. Code complete, pre-deployment.
+
+---
+
+## Table of contents
+
+- [What this is](#what-this-is)
+- [What this is NOT](#what-this-is-not)
+- [Architecture](#architecture)
+- [Getting started](#getting-started)
+- [Development](#development)
+- [Self-hosting](#self-hosting)
+- [Repository layout](#repository-layout)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
+
+---
 
 ## What this is
 
-This repo contains the Worker that:
-- Sits in front of a publisher's origin via Cloudflare Custom Hostnames (SSL-for-SaaS)
-- Verifies WBA-signed requests (RFC 9421)
-- Applies per-tenant pricing rules
-- Issues HTTP 402 with x402 payment requirements when a charge is required
-- Verifies and settles x402 payments via the Coinbase facilitator (USDC on Base)
-- Forwards all approved traffic to the publisher's origin
-- Logs every decision to R2 for downstream analytics
+The Worker:
+
+- Sits in front of a publisher's origin via Cloudflare **Custom Hostnames (SSL-for-SaaS)**.
+- Verifies **WBA-signed** requests (RFC 9421) with SSRF-hardened public-key fetches and `@authority` matching.
+- Applies **per-tenant pricing rules** (path × agent → `charge | allow | block`).
+- Issues `HTTP 402` with x402 payment requirements when a charge is required.
+- Verifies and settles **x402 payments** via the public [Coinbase facilitator](https://x402.org/facilitator) (USDC on Base mainnet, Sepolia for staging).
+- Streams the origin response back to the agent, attaching `X-PAYMENT-RESPONSE` after settlement.
+- Writes a structured log entry to **R2** for every decision (revenue audit + future analytics).
+- Emits **Workers Analytics Engine** metrics for verify/settle latency, settle failures, detector matches, etc.
 
 ## What this is NOT
 
-- Not a billing system (Stripe Connect lives in the closed-source control plane)
-- Not a publisher dashboard (separate repo, closed source)
-- Not a WordPress plugin (separate repo, GPL)
-- Not a multi-cloud abstraction (Cloudflare-only by design for v0)
+- **Not a billing system.** Stripe Connect lives in the closed-source control plane.
+- **Not a publisher dashboard.** Separate repo, closed source.
+- **Not a WordPress plugin.** Separate repo, GPL-licensed.
+- **Not a multi-cloud abstraction.** Cloudflare-only by design for v0.
 
-## Self-hosting
+## Architecture
 
-You can run your own Paperward edge by deploying this Worker to your Cloudflare account. See `docs/setup.md` (TODO before public release).
+```
+   Agent / browser request
+            │
+            ▼
+   ┌────────────────────────┐
+   │  Cloudflare Worker     │
+   │   (this repo)          │
+   │                        │
+   │  ┌──────────────────┐  │
+   │  │ tenantResolver   │──┼─→ KV (per-tenant config, isolate-cached)
+   │  ├──────────────────┤  │
+   │  │ detectorPipeline │──┼─→ KV_KEY_CACHE (WBA public keys)
+   │  ├──────────────────┤  │
+   │  │ pricingResolver  │  │
+   │  ├──────────────────┤  │
+   │  │ paywall (verify) │──┼─→ Coinbase x402 facilitator
+   │  ├──────────────────┤  │
+   │  │ originForwarder  │──┼─→ Publisher origin (streamed)
+   │  ├──────────────────┤  │
+   │  │ paywall (settle) │──┼─→ Coinbase x402 facilitator
+   │  ├──────────────────┤  │
+   │  │ logger           │──┼─→ R2 (request logs) + Analytics Engine
+   │  └──────────────────┘  │
+   └────────────────────────┘
+            │
+            ▼
+   Streamed response (with X-PAYMENT-RESPONSE on charge_paid)
+```
 
-## Contributing
+Full design at [`docs/superpowers/specs/2026-05-05-edge-layer-v0-design.md`](./docs/superpowers/specs/2026-05-05-edge-layer-v0-design.md).
+Implementation plan at [`docs/superpowers/plans/2026-05-05-paperward-edge-layer-v0.md`](./docs/superpowers/plans/2026-05-05-paperward-edge-layer-v0.md).
 
-Pull requests are not accepted while v0 is being stabilized. Issues, discussions, and feedback are welcome.
+## Getting started
 
-## Pinned dependencies
+### Prerequisites
 
-The following core dependencies are pinned to ensure consistent behavior across deployments:
+- Node.js ≥ 20 (see [`.nvmrc`](./.nvmrc))
+- A Cloudflare account on the **Workers Paid plan** (required for KV, R2, Custom Hostnames, Analytics Engine)
 
-- `hono`: 4.12.17
-- `web-bot-auth`: 0.1.3 (Web Bot Authentication using HTTP Message Signatures)
-- `x402-hono`: 1.2.0 (x402 payment request middleware for Hono)
-- `ulid`: 2.4.0 (ULID generation)
-- `toucan-js`: 4.1.1 (Sentry error tracking for Cloudflare Workers)
-- `@cloudflare/workers-types`: 4.20260101.0
-- `wrangler`: 3.80.0 (Cloudflare Workers CLI)
-- `typescript`: 5.4.0
-- `vitest`: 2.0.0
+### Setup
 
-For IETF draft revisions: The `web-bot-auth` package implements HTTP Message Signatures per RFC 9421. Check the [package repository](https://www.npmjs.com/package/web-bot-auth) for the specific draft revision targeting if integrating with other WBA implementations.
+```bash
+git clone https://github.com/ledger-things/paperward-edge.git
+cd paperward-edge
+npm install
+cp .dev.vars.example .dev.vars   # then fill in values for local dev
+```
 
-## Provisioning a tenant
+### Run the test suite
 
-Once the Worker is deployed and you've created the necessary secrets, provision a new tenant with:
+```bash
+npm test            # all 133 unit + integration tests
+npm run typecheck   # strict TypeScript checking
+npm run lint        # Biome lint
+npm run format:check
+```
+
+### Run the Worker locally
+
+```bash
+npm run dev         # wrangler dev --env dev
+```
+
+## Development
+
+| Script              | Purpose                                                     |
+|---------------------|-------------------------------------------------------------|
+| `npm test`          | Run unit + integration tests                                |
+| `npm run test:watch`| Vitest in watch mode                                        |
+| `npm run typecheck` | Regenerate `worker-configuration.d.ts` and run `tsc`        |
+| `npm run lint`      | Biome lint                                                  |
+| `npm run format`    | Biome formatter (writes changes)                            |
+| `npm run check`     | Combined lint + format check                                |
+| `npm run dev`       | `wrangler dev --env dev`                                    |
+| `npm run deploy:staging`    | Deploy to staging                                   |
+| `npm run deploy:production` | Deploy to production                                |
+| `npm run provision-tenant`  | CLI to provision a tenant end-to-end                |
+
+### Provision a tenant
 
 ```bash
 ADMIN_BASE_URL=https://admin.staging.paperward.com \
 ADMIN_TOKEN=... \
 CF_API_TOKEN=... \
 CF_ZONE_ID=... \
-tsx bin/provision-tenant.ts \
+npm run provision-tenant -- \
   --hostname=blog.example.com \
   --origin=https://internal-origin.example.com \
   --payout-address=0x... \
@@ -66,7 +147,90 @@ tsx bin/provision-tenant.ts \
 
 The script writes the tenant config via the admin endpoint, registers the hostname with Cloudflare's Custom Hostnames API, and prints DCV instructions for the publisher.
 
-## Spec
+## Self-hosting
 
-Detailed design: `docs/superpowers/specs/2026-05-05-edge-layer-v0-design.md`.
-Implementation plan: `docs/superpowers/plans/2026-05-05-paperward-edge-layer-v0.md`.
+You can run your own Paperward edge against your own Cloudflare account. See [`docs/setup.md`](./docs/setup.md) for the full runbook (KV namespaces, R2 buckets, Analytics Engine datasets, secrets, Custom Hostnames). Production cutover checklist at [`docs/production-cutover.md`](./docs/production-cutover.md).
+
+## Repository layout
+
+```
+.
+├── src/
+│   ├── index.ts                 # Top-level Worker entry; host-based routing
+│   ├── middleware/              # Hono middleware (tenant, detector, pricing, paywall, origin, logger)
+│   ├── detectors/               # WebBotAuthDetector, HumanDetector, registry
+│   ├── facilitators/            # CoinbaseX402Facilitator, registry
+│   ├── config/                  # TenantConfig types + KV cache
+│   ├── logging/                 # LogEntry, R2 writer, audit
+│   ├── metrics/                 # Analytics Engine helper
+│   ├── observability/           # Sentry init (toucan-js)
+│   ├── admin/                   # /__admin endpoints (tenant CRUD)
+│   ├── health/                  # /healthz, /version
+│   ├── utils/                   # patterns, safe-url, bounded-fetch
+│   └── types.ts                 # Env, Vars
+├── test/
+│   ├── unit/                    # vitest unit tests (Node)
+│   ├── integration/             # vitest + miniflare integration tests
+│   ├── e2e/                     # Real-staging e2e against Sepolia
+│   ├── fixtures/                # WBA Ed25519 keypair, signed-request generator
+│   └── mocks/                   # Mock Facilitator, Hono context helper
+├── bin/
+│   └── provision-tenant.ts      # End-to-end tenant provisioning CLI
+├── docs/
+│   ├── setup.md                 # Self-hosting / deploy runbook
+│   ├── production-cutover.md    # First-prod-deploy checklist
+│   └── superpowers/             # Spec + implementation plan
+├── wrangler.toml                # Three Wrangler envs: dev, staging, production
+└── biome.json                   # Lint + format config
+```
+
+## Roadmap
+
+This repo is the **edge layer**, the first of several Paperward subsystems. See the project [PRD](./PRD.md) for the full picture. Coming next:
+
+- **Control plane** — publisher signup, dashboard, pricing UI, Stripe Connect payouts. Closed source, separate repo.
+- **WordPress plugin** — onboarding wizard for the ~40% of the web on WordPress. Separate GPL repo.
+- **Next.js middleware** — npm package; same logic as this Worker, runs in publisher's own Vercel deployment.
+- **Citation tracker** — adjacent feature; tracks AI-citation referral traffic.
+
+## Contributing
+
+Pull requests are **not** actively merged while v0 stabilizes. Issues, discussions, bug reports, and feedback are very welcome.
+
+- [Open an issue](https://github.com/ledger-things/paperward-edge/issues/new/choose)
+- Read the [Code of Conduct](./CODE_OF_CONDUCT.md)
+- See [CONTRIBUTING.md](./CONTRIBUTING.md) for details
+
+## Security
+
+This Worker handles cryptographic verification and payment authorization. Please disclose vulnerabilities responsibly — do **not** file public issues. See [SECURITY.md](./SECURITY.md).
+
+## License
+
+Apache 2.0 — see [LICENSE](./LICENSE).
+
+The "Paperward" name and brand are service marks. The code is forkable; the brand is not.
+
+---
+
+<details>
+<summary><strong>Pinned dependencies</strong> (click to expand)</summary>
+
+Core dependencies are pinned to keep behavior consistent across deployments and to avoid surprise updates from upstream draft churn:
+
+| Package | Version | Notes |
+|---|---|---|
+| `hono` | 4.12.17 | Worker framework |
+| `web-bot-auth` | 0.1.3 | RFC 9421 verification (Stytch reference) |
+| `ulid` | 2.4.0 | ULID generation |
+| `toucan-js` | 4.1.1 | Sentry SDK for Workers |
+| `viem` | ≥ 2.48 | EIP-712 signing for the Sepolia e2e suite |
+| `@cloudflare/workers-types` | 4.x | Workers ambient types |
+| `wrangler` | 3.x | Workers CLI |
+| `typescript` | 5.x | |
+| `vitest` | 2.x | |
+| `@biomejs/biome` | 2.4.14 | Lint + format |
+
+The `web-bot-auth` package targets a moving IETF draft. Re-validate signature compatibility on every major version bump.
+
+</details>
