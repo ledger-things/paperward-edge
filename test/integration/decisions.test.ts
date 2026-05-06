@@ -21,6 +21,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:
 import worker from "@/index";
 import { seedTenant, readLogs, makeTenant } from "./_helpers";
 import { _resetTenantCache } from "@/middleware/tenantResolver";
+import { _resetDetectorsCache, _resetFacilitatorsCache } from "@/index";
 import { signRequest } from "../fixtures/wba/sign";
 import { FIXTURE_DIRECTORY } from "../fixtures/wba/directory";
 import { FIXTURE_KEYS } from "../fixtures/wba/keys";
@@ -116,6 +117,8 @@ function makePaymentFetchSpy(opts: {
 
 beforeEach(async () => {
   _resetTenantCache();
+  _resetDetectorsCache();
+  _resetFacilitatorsCache();
   const list = await (env.R2_LOGS as R2Bucket).list();
   for (const o of list.objects) {
     await (env.R2_LOGS as R2Bucket).delete(o.key);

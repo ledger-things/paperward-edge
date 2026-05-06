@@ -61,13 +61,35 @@ export async function boundedFetch(
     return { ok: false, reason: "redirect_not_followed" };
   }
 
-  const contentLength = resp.headers.get("content-length");
-  if (contentLength !== null) {
-    const len = Number(contentLength);
-    if (Number.isFinite(len) && len > options.maxBytes) {
-      return { ok: false, reason: "response_too_large" };
+  // Enforce body size cap via streaming reader — works even when
+  // content-length is absent (e.g. chunked transfer encoding).
+  const reader = resp.body?.getReader();
+  if (!reader) {
+    // Body is null (e.g. HEAD response) — nothing to cap.
+    return { ok: true, body: new Response(null, { status: resp.status, headers: resp.headers }) };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      totalBytes += value.byteLength;
+      if (totalBytes > options.maxBytes) {
+        reader.cancel().catch(() => {});
+        return { ok: false, reason: "response_too_large" };
+      }
+      chunks.push(value);
     }
   }
 
-  return { ok: true, body: resp };
+  // Reassemble buffered bytes into a new Response so callers can use .text() etc.
+  const buffered = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffered.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, body: new Response(buffered, { status: resp.status, headers: resp.headers }) };
 }
