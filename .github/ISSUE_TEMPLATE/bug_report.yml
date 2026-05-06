@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a bug, regression, or unexpected behavior in the edge layer.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much as you can.
+
+        **Security issue?** Please use [SECURITY.md](../../SECURITY.md) instead, not a public issue.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line summary of the bug.
+      placeholder: "Worker returns 502 for valid agent requests against blog.example.com"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Production (paperward.com)
+        - Staging (staging.paperward.com)
+        - Self-hosted
+        - Local dev (wrangler dev)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: How do we reproduce the issue?
+      placeholder: |
+        1. Provision tenant `blog.example.com` with rule `{path: "/articles/*", agent: "signed:openai.com", action: "charge", price: "0.005"}`
+        2. Send signed WBA request with valid x402 payment to `/articles/foo`
+        3. Observe response
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the response status, body, and any X-Paperward-* response headers if relevant.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit SHA / version
+      description: Output of `git rev-parse HEAD` or the deployed Worker's `/version` endpoint.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, related issues, anything else that helps.
