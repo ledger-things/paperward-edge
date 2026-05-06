@@ -1,18 +1,24 @@
-// src/facilitators/coinbase-x402.ts
+// src/facilitators/solana-x402.ts
 //
-// EVM x402 facilitator wrapper, configured for Base by default.
-// Speaks x402 v2 wire format — see specs/x402-specification-v2.md and
-// specs/schemes/exact/scheme_exact_evm.md in coinbase/x402.
+// Solana (SVM) x402 facilitator wrapper. Speaks x402 v2 wire format —
+// see specs/schemes/exact/scheme_exact_svm.md in the coinbase/x402 repo.
 //
-// Architecture:
+// Architecture (identical to the EVM facilitator):
 //   • Resource server (this Worker) calls a hosted facilitator's /verify and
-//     /settle endpoints.
-//   • Facilitator handles the chain interaction (broadcasting EIP-3009
-//     transferWithAuthorization). Resource server is HTTP-only.
+//     /settle endpoints. No `@solana/web3.js` in the Worker.
+//   • The facilitator decodes the partially-signed Solana transaction, runs
+//     the spec's MUST checks (instruction layout, fee-payer safety, transfer
+//     intent, etc.), co-signs as feePayer, and broadcasts.
 //
-// The 402 `accepts[]` entry returned to the agent uses the x402 v2 wire
-// format: `eip155:<chainId>` for network, USDC contract address for asset,
-// `amount` (in micro-USDC, integer string) instead of decimal `amount_usdc`.
+// What's different from EVM on the wire:
+//   • `network` is `solana:<base58 genesis hash>` (not `eip155:<chainId>`).
+//   • `asset` is the SPL token mint pubkey (e.g. USDC mint), not a contract.
+//   • `payload.transaction` is base64-encoded serialized partially-signed tx,
+//     not (signature + EIP-3009 authorization).
+//   • `extra.feePayer` MUST be set in the 402 PaymentRequirements — it's the
+//     facilitator's pubkey that will co-sign and pay gas.
+//
+// The Facilitator interface and HTTP shape stay identical to EVM.
 
 import type {
   Facilitator,
@@ -22,32 +28,35 @@ import type {
   VerifyResult,
 } from "@/facilitators/types";
 import { networkToX402 } from "@/facilitators/types";
+import { decodePaymentHeader } from "@/facilitators/coinbase-x402";
 
-const DEFAULT_FACILITATOR_BASE = "https://x402.org/facilitator";
-
-/** USDC contract addresses per EVM network. Source: Circle docs. */
-const USDC_CONTRACT: Record<Extract<Network, "base-mainnet" | "base-sepolia">, string> = {
-  "base-mainnet": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  "base-sepolia": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+/** USDC SPL mint addresses per Solana cluster. */
+const USDC_MINT: Record<Extract<Network, "solana-mainnet" | "solana-devnet">, string> = {
+  "solana-mainnet": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  // Devnet USDC has no canonical mint; pick one used by Circle's faucet or by
+  // your facilitator. This is the most-used devnet test mint and matches what
+  // pay.sh / Solana ecosystem references default to.
+  "solana-devnet": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
 };
 
-export type CoinbaseX402Deps = {
-  network: "base-mainnet" | "base-sepolia";
-  /** Override the facilitator service URL. Default: x402.org/facilitator. */
-  facilitatorUrl?: string;
+export type SolanaX402Deps = {
+  network: "solana-mainnet" | "solana-devnet";
+  /** The facilitator's Solana pubkey — embedded in 402 responses as feePayer. */
+  feePayer: string;
+  /** Facilitator service URL. No public default yet; operator must configure. */
+  facilitatorUrl: string;
   fetchImpl?: typeof fetch;
   apiKey?: string;
 };
 
-export class CoinbaseX402Facilitator implements Facilitator {
-  readonly id = "coinbase-x402-base";
+export class SolanaX402Facilitator implements Facilitator {
+  readonly id: string;
   readonly supportedNetworks: readonly Network[];
   private readonly fetchImpl: typeof fetch;
-  private readonly facilitatorUrl: string;
 
-  constructor(private readonly deps: CoinbaseX402Deps) {
+  constructor(private readonly deps: SolanaX402Deps) {
     this.fetchImpl = deps.fetchImpl ?? fetch;
-    this.facilitatorUrl = deps.facilitatorUrl ?? DEFAULT_FACILITATOR_BASE;
+    this.id = `x402-${deps.network}`;
     this.supportedNetworks = [deps.network];
   }
 
@@ -72,19 +81,16 @@ export class CoinbaseX402Facilitator implements Facilitator {
     });
   }
 
-  /**
-   * Builds a single `accepts[]` entry. Exposed so the multi-rail paywall
-   * middleware can compose entries from several facilitators into one 402.
-   */
+  /** Builds a single `accepts[]` entry. Composable into multi-rail 402 responses. */
   buildAcceptsEntry(req: PaymentRequirements): Record<string, unknown> {
     return {
       scheme: "exact",
       network: networkToX402(req.network),
       amount: usdcDecimalToMicro(req.amount_usdc),
-      asset: USDC_CONTRACT[this.deps.network],
+      asset: USDC_MINT[this.deps.network],
       payTo: req.recipient,
       maxTimeoutSeconds: 60,
-      extra: { name: "USDC", version: "2" },
+      extra: { feePayer: this.deps.feePayer },
     };
   }
 
@@ -95,7 +101,7 @@ export class CoinbaseX402Facilitator implements Facilitator {
     const paymentPayload = decodePaymentHeader(payment);
     if (!paymentPayload) return { valid: false, reason: "malformed_payment_header" };
 
-    const r = await this.fetchImpl(`${this.facilitatorUrl}/verify`, {
+    const r = await this.fetchImpl(`${this.deps.facilitatorUrl}/verify`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({
@@ -112,8 +118,6 @@ export class CoinbaseX402Facilitator implements Facilitator {
     if (body.isValid === true) {
       const result: VerifyResult = {
         valid: true,
-        // settlement_handle carries the decoded payload + original requirements;
-        // settle() re-uses both when calling the facilitator.
         settlement_handle: { paymentPayload, requirements },
       };
       if (typeof body.payer === "string") result.payer = body.payer;
@@ -135,7 +139,7 @@ export class CoinbaseX402Facilitator implements Facilitator {
       requirements: PaymentRequirements;
     };
 
-    const r = await this.fetchImpl(`${this.facilitatorUrl}/settle`, {
+    const r = await this.fetchImpl(`${this.deps.facilitatorUrl}/settle`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({
@@ -168,10 +172,7 @@ export class CoinbaseX402Facilitator implements Facilitator {
   }
 }
 
-/**
- * USDC has 6 decimal places. Spec wants integer string of micro-USDC.
- * "0.005" → "5000". Tolerates leading/trailing whitespace, optional sign rejected.
- */
+/** USDC has 6 decimal places. "0.005" → "5000". */
 function usdcDecimalToMicro(decimal: string): string {
   const trimmed = decimal.trim();
   if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) {
@@ -179,17 +180,6 @@ function usdcDecimalToMicro(decimal: string): string {
   }
   const [whole, frac = ""] = trimmed.split(".");
   const padded = (frac + "000000").slice(0, 6);
-  // Strip leading zeros from concatenation, but keep at least "0".
   const result = `${whole}${padded}`.replace(/^0+(?=\d)/, "") || "0";
   return result;
-}
-
-/** X-PAYMENT header is base64(JSON(PaymentPayload)). Returns the parsed object or null. */
-export function decodePaymentHeader(header: string): unknown {
-  try {
-    const json = atob(header);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
 }
