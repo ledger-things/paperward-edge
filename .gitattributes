@@ -1,0 +1,9 @@
+# Force LF line endings on checkout and commit.
+* text=auto eol=lf
+
+# Generated files — exclude from language stats and diff noise.
+worker-configuration.d.ts linguist-generated=true
+package-lock.json linguist-generated=true
+
+# Lockfile — make GitHub collapse the diff by default.
+package-lock.json -diff
