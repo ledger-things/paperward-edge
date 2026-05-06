@@ -3,7 +3,7 @@
 [![CI](https://github.com/ledger-things/paperward-edge/actions/workflows/ci.yml/badge.svg)](https://github.com/ledger-things/paperward-edge/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ledger-things/paperward-edge/actions/workflows/codeql.yml/badge.svg)](https://github.com/ledger-things/paperward-edge/actions/workflows/codeql.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](./.nvmrc)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](./.nvmrc)
 [![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)](./tsconfig.json)
 [![Biome](https://img.shields.io/badge/lint-biome-60a5fa.svg)](https://biomejs.dev/)
 
@@ -89,7 +89,7 @@ Implementation plan at [`docs/superpowers/plans/2026-05-05-paperward-edge-layer-
 
 ### Prerequisites
 
-- Node.js ≥ 20 (see [`.nvmrc`](./.nvmrc))
+- Node.js ≥ 22 (see [`.nvmrc`](./.nvmrc))
 - A Cloudflare account on the **Workers Paid plan** (required for KV, R2, Custom Hostnames, Analytics Engine)
 
 ### Setup
