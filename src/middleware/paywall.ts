@@ -17,7 +17,12 @@
 
 import type { MiddlewareHandler } from "hono";
 import type { Env, Vars } from "@/types";
-import type { Facilitator, PaymentRequirements, SettleResult, VerifyResult } from "@/facilitators/types";
+import type {
+  Facilitator,
+  PaymentRequirements,
+  SettleResult,
+  VerifyResult,
+} from "@/facilitators/types";
 import { Metrics } from "@/metrics/analytics-engine";
 
 export function buildPaywallMiddleware(

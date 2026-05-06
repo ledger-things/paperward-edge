@@ -111,9 +111,7 @@ async function postAdminTenant(args: Args): Promise<{ tenant_id: string }> {
   return { tenant_id };
 }
 
-async function registerCustomHostname(
-  hostname: string,
-): Promise<{
+async function registerCustomHostname(hostname: string): Promise<{
   ssl_validation: { type: string; status: string; txt_name?: string; txt_value?: string };
 }> {
   const cfToken = requireEnv("CF_API_TOKEN");
