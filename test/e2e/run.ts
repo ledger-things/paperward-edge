@@ -56,7 +56,10 @@ await expect("browser request returns 200", async () => {
 });
 
 await expect("signed request without payment returns 402 with x402 headers", async () => {
-  const req = await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT });
+  const req = await signRequest({
+    url: `https://${HOST}/paid/article-1`,
+    signatureAgent: SIG_AGENT,
+  });
   const r = await fetch(req);
   if (r.status !== 402) throw new Error(`expected 402, got ${r.status}`);
   const auth = r.headers.get("WWW-Authenticate") ?? "";
@@ -69,7 +72,9 @@ await expect("signed request without payment returns 402 with x402 headers", asy
 
 await expect("signed request with valid Sepolia x402 payment returns 200", async () => {
   // 1. First call to get the payment requirements
-  const probe = await fetch(await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }));
+  const probe = await fetch(
+    await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }),
+  );
   const reqs = ((await probe.json()) as any).accepts[0];
   // 2. Build a Sepolia x402 payment payload using viem (or whatever the
   //    x402 client library exposes). This is a multi-line block — see the
@@ -90,7 +95,9 @@ await expect("signed request with valid Sepolia x402 payment returns 200", async
 });
 
 await expect("signed request with wrong amount returns 402 charge_verify_failed", async () => {
-  const probe = await fetch(await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }));
+  const probe = await fetch(
+    await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }),
+  );
   const reqs = ((await probe.json()) as any).accepts[0];
   const { makeSepoliaPayment } = await import("./sepolia-payment");
   // Pay 1 wei — way too low
