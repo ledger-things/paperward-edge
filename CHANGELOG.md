@@ -6,6 +6,25 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Added (2026-05-07)
+
+**Staging deployment + full end-to-end validation on real Cloudflare + Base Sepolia.**
+
+The v0 edge layer is now deployed to staging on the `paperward.com` Cloudflare zone and validated end-to-end against real cryptographic signing and real on-chain payment settlement.
+
+- **Cloudflare staging environment provisioned:** Workers Paid plan, KV namespaces, R2 bucket, Analytics Engine dataset, Workers Custom Domains for admin/health/test-blog/e2e-test, sibling JWKS Worker (`paperward-agent-jwks-staging`) for WBA test fixture.
+- **WBA detection + paywall stub validated** (Phase A): WBA-signed request → JWKS fetched from sibling Worker → Ed25519 signature verified → agent identified → pricing rule matches → 402 with x402 v2 payment requirements pointing at the publisher's payout address.
+- **x402 verify + settle validated against the real Coinbase facilitator on Base Sepolia** (Phase B): real EIP-3009 transferWithAuthorization broadcast and confirmed on-chain (0.001 USDC moved from agent wallet to publisher payout, on-chain balance delta verified). Settlement returns `X-PAYMENT-RESPONSE` header.
+- **Underpayment correctly rejected**: a payment with insufficient `value` returns `402 charge_verify_failed`, not 200.
+- **SaaS Custom Hostnames + real third-party DNS** validated end-to-end against `test-blog.ltmd.it` (vhosting-it.com cPanel-managed). Required a `*/*` wildcard Workers Route on the zone — the canonical pattern; both Custom Domains and host-scoped Workers Routes match on Host header, which doesn't catch SaaS-forwarded traffic where Host is the customer's domain. Confirmed by Cloudflare support.
+- **GitHub Actions deploy-staging workflow** runs on every push to `main`: lint → typecheck → 154 unit+integration tests → `wrangler deploy --env staging` → e2e suite (real Sepolia payments). E2E auto-skips if `E2E_SEPOLIA_PRIVATE_KEY` secret is unset, making the workflow useful even without the funded wallet configured.
+- **Bug fixes uncovered during staging validation:**
+  - Durable Object class must `extends DurableObject` from `cloudflare:workers` and use `new_sqlite_classes` migration (not legacy `new_classes`) — without both, every request returns 500/1101.
+  - `boundedFetch` strips `content-encoding`/`content-length` from buffered responses to avoid double-decompression by the Workers runtime.
+  - Both `CoinbaseX402Facilitator` and `SolanaX402Facilitator` now `fetch.bind(globalThis)` when storing the global fetch as an instance field — invoking `this.fetchImpl(...)` on the unbound global throws "Illegal invocation" on real CF Workers (mocks didn't catch this).
+  - `bin/provision-tenant.ts` updated to send the multi-rail `accepted_facilitators[]` schema (was sending the obsolete v1 `facilitator_id` + `payout_address` pair) and to correctly parse the Cloudflare custom_hostnames API response shape.
+  - `test/e2e/sepolia-payment.ts` rewritten for x402 v2 wire format (`amount` in micro-USDC under `accepted`, not `maxAmountRequired` decimal at top level) and now tolerates the Sepolia private key with or without `0x` prefix.
+
 ### Added (2026-05-06)
 
 **Solana payment rail — interoperability with [pay.sh](https://pay.sh).**
