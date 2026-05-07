@@ -4,12 +4,12 @@
 [![CodeQL](https://github.com/ledger-things/paperward-edge/actions/workflows/codeql.yml/badge.svg)](https://github.com/ledger-things/paperward-edge/actions/workflows/codeql.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen.svg)](./.nvmrc)
-[![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)](./tsconfig.json)
+[![TypeScript](https://img.shields.io/badge/typescript-6.x-blue.svg)](./tsconfig.json)
 [![Biome](https://img.shields.io/badge/lint-biome-60a5fa.svg)](https://biomejs.dev/)
 
 > The open-source edge layer of [Paperward](./PRD.md) — an agent-payments platform for SMB publishers.
 
-A Cloudflare Worker that fronts a publisher's origin, identifies AI agent traffic via [Web Bot Auth (RFC 9421)](https://datatracker.ietf.org/doc/draft-ietf-web-bot-auth-architecture/), charges per-fetch via [x402](https://www.x402.org/) (USDC on Base), and forwards approved traffic to the origin.
+A Cloudflare Worker that fronts a publisher's origin, identifies AI agent traffic via [Web Bot Auth (RFC 9421)](https://datatracker.ietf.org/doc/draft-ietf-web-bot-auth-architecture/), charges per-fetch via [x402](https://www.x402.org/) (USDC on **Base** or **Solana** — multi-rail per tenant), and forwards approved traffic to the origin.
 
 **Status:** Pre-v0. Code complete, pre-deployment.
 
@@ -38,8 +38,10 @@ The Worker:
 - Sits in front of a publisher's origin via Cloudflare **Custom Hostnames (SSL-for-SaaS)**.
 - Verifies **WBA-signed** requests (RFC 9421) with SSRF-hardened public-key fetches and `@authority` matching.
 - Applies **per-tenant pricing rules** (path × agent → `charge | allow | block`).
-- Issues `HTTP 402` with x402 payment requirements when a charge is required.
-- Verifies and settles **x402 payments** via the public [Coinbase facilitator](https://x402.org/facilitator) (USDC on Base mainnet, Sepolia for staging).
+- Issues `HTTP 402` with x402 payment requirements when a charge is required, advertising **every payment rail the tenant accepts** in the same response.
+- Verifies and settles **x402 v2 payments** across multiple rails:
+  - **Base** (USDC, mainnet / Sepolia for staging) via the public [Coinbase facilitator](https://x402.org/facilitator).
+  - **Solana** (USDC, mainnet / devnet for staging) via a configurable hosted facilitator (e.g. [pay.sh](https://pay.sh)) — no `@solana/web3.js` in the Worker; the facilitator co-signs and broadcasts.
 - Streams the origin response back to the agent, attaching `X-PAYMENT-RESPONSE` after settlement.
 - Writes a structured log entry to **R2** for every decision (revenue audit + future analytics).
 - Emits **Workers Analytics Engine** metrics for verify/settle latency, settle failures, detector matches, etc.
@@ -68,11 +70,11 @@ The Worker:
    │  ├──────────────────┤  │
    │  │ pricingResolver  │  │
    │  ├──────────────────┤  │
-   │  │ paywall (verify) │──┼─→ Coinbase x402 facilitator
+   │  │ paywall (verify) │──┼─→ Coinbase (Base) / Solana x402 facilitator
    │  ├──────────────────┤  │
    │  │ originForwarder  │──┼─→ Publisher origin (streamed)
    │  ├──────────────────┤  │
-   │  │ paywall (settle) │──┼─→ Coinbase x402 facilitator
+   │  │ paywall (settle) │──┼─→ Coinbase (Base) / Solana x402 facilitator
    │  ├──────────────────┤  │
    │  │ logger           │──┼─→ R2 (request logs) + Analytics Engine
    │  └──────────────────┘  │
@@ -104,7 +106,7 @@ cp .dev.vars.example .dev.vars   # then fill in values for local dev
 ### Run the test suite
 
 ```bash
-npm test            # all 133 unit + integration tests
+npm test            # all 154 unit + integration tests
 npm run typecheck   # strict TypeScript checking
 npm run lint        # Biome lint
 npm run format:check
@@ -159,7 +161,7 @@ You can run your own Paperward edge against your own Cloudflare account. See [`d
 │   ├── index.ts                 # Top-level Worker entry; host-based routing
 │   ├── middleware/              # Hono middleware (tenant, detector, pricing, paywall, origin, logger)
 │   ├── detectors/               # WebBotAuthDetector, HumanDetector, registry
-│   ├── facilitators/            # CoinbaseX402Facilitator, registry
+│   ├── facilitators/            # CoinbaseX402Facilitator, SolanaX402Facilitator, registry (x402 v2)
 │   ├── config/                  # TenantConfig types + KV cache
 │   ├── logging/                 # LogEntry, R2 writer, audit
 │   ├── metrics/                 # Analytics Engine helper
