@@ -39,7 +39,7 @@ class_name = "RateLimiterDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["RateLimiterDO"]
+new_sqlite_classes = ["RateLimiterDO"]
 
 # Q_SETTLE_RETRY queue intentionally NOT declared in v0.
 # (Adding it later, when the producer call site and consumer
@@ -98,15 +98,15 @@ HEALTH_HOSTNAME = "health.staging.paperward.com"
 
 [[env.staging.kv_namespaces]]
 binding = "KV_DOMAINS"
-id = "REPLACE_ME_STAGING_DOMAINS"
+id = "5ad4c3b4a4ad4a6fab601cd954e8553d"
 
 [[env.staging.kv_namespaces]]
 binding = "KV_KEY_CACHE"
-id = "REPLACE_ME_STAGING_KEY_CACHE"
+id = "d23c1be1b3ca46deb6785cbc3978d3fd"
 
 [[env.staging.kv_namespaces]]
 binding = "KV_AUDIT"
-id = "REPLACE_ME_STAGING_AUDIT"
+id = "ee525f69b97c41f5b33a90fdd143c643"
 
 [[env.staging.r2_buckets]]
 binding = "R2_LOGS"

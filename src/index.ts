@@ -10,6 +10,7 @@
 //   → paywall (pre+post) → originForwarder (route handler).
 
 import { Hono } from "hono";
+import { DurableObject } from "cloudflare:workers";
 import type { Env, Vars } from "@/types";
 import { buildAdminApp } from "@/admin/index";
 import { buildHealthApp } from "@/health/index";
@@ -123,9 +124,11 @@ app.all("*", async (c) => {
 });
 
 // Stub Durable Object class — not invoked in v0 but required because the
-// wrangler.toml binding declares it. Class shape will be filled in when the
-// rate-limiting feature is built.
-export class RateLimiterDO {
+// wrangler.toml binding declares it. Must extend `DurableObject` because the
+// migration uses `new_sqlite_classes` (SQLite-backed DOs require extension;
+// plain classes are only valid for legacy KV-backed DOs). Class shape will
+// be filled in when the rate-limiting feature is built.
+export class RateLimiterDO extends DurableObject<Env> {
   async fetch(_req: Request): Promise<Response> {
     return new Response("rate limiter not implemented in v0", { status: 501 });
   }
