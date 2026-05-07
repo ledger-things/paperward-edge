@@ -18,6 +18,16 @@ if (!HOST) {
   process.exit(2);
 }
 
+// The full suite needs a funded Sepolia wallet to make real x402 payments.
+// In CI, the secret may not be set yet (intentionally — the wallet costs real
+// effort to set up and top up). When the key is absent, skip cleanly with
+// exit 0 so the workflow stays green; the suite auto-enables once the secret
+// is configured.
+if (!process.env.E2E_SEPOLIA_PRIVATE_KEY) {
+  console.log("E2E_SEPOLIA_PRIVATE_KEY not set — skipping e2e (no funded test wallet)");
+  process.exit(0);
+}
+
 let failures = 0;
 
 async function expect(name: string, fn: () => Promise<void>): Promise<void> {
