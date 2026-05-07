@@ -57,7 +57,7 @@ await expect("browser request returns 200", async () => {
 
 await expect("signed request without payment returns 402 with x402 headers", async () => {
   const req = await signRequest({
-    url: `https://${HOST}/paid/article-1`,
+    url: `https://${HOST}/anything/article-1`,
     signatureAgent: SIG_AGENT,
   });
   const r = await fetch(req);
@@ -65,15 +65,15 @@ await expect("signed request without payment returns 402 with x402 headers", asy
   const auth = r.headers.get("WWW-Authenticate") ?? "";
   if (!/x402/i.test(auth)) throw new Error(`expected WWW-Authenticate: x402, got ${auth}`);
   const body = (await r.json()) as any;
-  if (!body.accepts?.[0]?.maxAmountRequired) {
-    throw new Error(`expected accepts[0].maxAmountRequired in body`);
+  if (!body.accepts?.[0]?.amount) {
+    throw new Error(`expected accepts[0].amount in body`);
   }
 });
 
 await expect("signed request with valid Sepolia x402 payment returns 200", async () => {
   // 1. First call to get the payment requirements
   const probe = await fetch(
-    await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }),
+    await signRequest({ url: `https://${HOST}/anything/article-1`, signatureAgent: SIG_AGENT }),
   );
   const reqs = ((await probe.json()) as any).accepts[0];
   // 2. Build a Sepolia x402 payment payload using viem (or whatever the
@@ -84,7 +84,7 @@ await expect("signed request with valid Sepolia x402 payment returns 200", async
   const xPayment = await makeSepoliaPayment(reqs, process.env.E2E_SEPOLIA_PRIVATE_KEY!);
   // 3. Re-issue the request with the X-PAYMENT header
   const signed = await signRequest({
-    url: `https://${HOST}/paid/article-1`,
+    url: `https://${HOST}/anything/article-1`,
     signatureAgent: SIG_AGENT,
     additionalHeaders: { "x-payment": xPayment },
   });
@@ -96,17 +96,17 @@ await expect("signed request with valid Sepolia x402 payment returns 200", async
 
 await expect("signed request with wrong amount returns 402 charge_verify_failed", async () => {
   const probe = await fetch(
-    await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }),
+    await signRequest({ url: `https://${HOST}/anything/article-1`, signatureAgent: SIG_AGENT }),
   );
   const reqs = ((await probe.json()) as any).accepts[0];
   const { makeSepoliaPayment } = await import("./sepolia-payment");
-  // Pay 1 wei — way too low
+  // Pay 1 micro-USDC — way under the rule's required amount
   const xPayment = await makeSepoliaPayment(
-    { ...reqs, maxAmountRequired: "0.000000001" },
+    { ...reqs, amount: "1" },
     process.env.E2E_SEPOLIA_PRIVATE_KEY!,
   );
   const signed = await signRequest({
-    url: `https://${HOST}/paid/article-1`,
+    url: `https://${HOST}/anything/article-1`,
     signatureAgent: SIG_AGENT,
     additionalHeaders: { "x-payment": xPayment },
   });

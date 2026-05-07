@@ -46,7 +46,11 @@ export class CoinbaseX402Facilitator implements Facilitator {
   private readonly facilitatorUrl: string;
 
   constructor(private readonly deps: CoinbaseX402Deps) {
-    this.fetchImpl = deps.fetchImpl ?? fetch;
+    // Bind fetch to globalThis: invoking it as `this.fetchImpl(...)` (a method
+    // call) would otherwise pass the facilitator instance as `this` and the CF
+    // Workers runtime throws "Illegal invocation". Injected fetchImpl (for
+    // tests) is used as-is — test mocks don't have the same constraint.
+    this.fetchImpl = deps.fetchImpl ?? fetch.bind(globalThis);
     this.facilitatorUrl = deps.facilitatorUrl ?? DEFAULT_FACILITATOR_BASE;
     this.supportedNetworks = [deps.network];
   }

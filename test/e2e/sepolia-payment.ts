@@ -1,49 +1,51 @@
 // test/e2e/sepolia-payment.ts
 //
-// Build an X-PAYMENT header value for the x402 protocol, paying USDC on Base
-// Sepolia. The exact payload shape depends on the x402 spec revision pinned
-// in package.json — read the x402-hono README and adapt the body of this
-// file to whatever shape the verifier expects.
+// Build an X-PAYMENT header value for the x402 protocol v2, paying USDC on
+// Base Sepolia. v2 wire format: amount is micro-USDC integer string, network
+// is `eip155:<chainId>`, asset is the USDC contract address. The agent signs
+// EIP-712 transferWithAuthorization (EIP-3009) and the facilitator broadcasts.
 //
-// At minimum, x402 v1 payments are EIP-712 typed data signing the transfer
-// authorization for the recipient + amount. The payload is base64url-encoded
-// JSON containing the signed authorization.
+// The X-PAYMENT header is base64(JSON(paymentPayload)) where paymentPayload
+// has the shape `{ x402Version, scheme, network, payload: { signature, authorization } }`.
 
 import { privateKeyToAccount } from "viem/accounts";
 import { signTypedData } from "viem/actions";
 import { createWalletClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
 
-type X402Requirements = {
+/**
+ * Shape of one entry in the 402 response's `accepts[]` array (x402 v2).
+ * Matches what CoinbaseX402Facilitator.buildAcceptsEntry returns.
+ */
+type X402AcceptsEntry = {
   scheme: string;
-  network: string;
-  maxAmountRequired: string;
+  network: string; // e.g. "eip155:84532"
+  amount: string; // micro-USDC integer string, e.g. "1000" = 0.001 USDC
+  asset: string; // ERC-20 contract address
   payTo: string;
-  resource: string;
-  asset: string;
+  maxTimeoutSeconds?: number;
+  extra?: { name?: string; version?: string };
 };
 
 export async function makeSepoliaPayment(
-  reqs: X402Requirements,
+  reqs: X402AcceptsEntry,
   privateKeyHex: string,
 ): Promise<string> {
   const account = privateKeyToAccount(privateKeyHex as `0x${string}`);
   const client = createWalletClient({ chain: baseSepolia, transport: http(), account });
 
-  // x402 EIP-712 transferWithAuthorization typed data. Field names match the
-  // EIP-3009 USDC standard. If the x402 spec revisions change the type names
-  // or domain, update here.
   const validAfter = 0n;
   const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600);
   const nonce =
     `0x${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex")}` as `0x${string}`;
-  const amountWei = BigInt(Math.floor(parseFloat(reqs.maxAmountRequired) * 1_000_000)); // USDC has 6 decimals
+  // v2 amount is already an integer string in the asset's smallest unit (micro-USDC).
+  const amountWei = BigInt(reqs.amount);
 
   const domain = {
-    name: "USD Coin",
-    version: "2",
+    name: reqs.extra?.name ?? "USD Coin",
+    version: reqs.extra?.version ?? "2",
     chainId: baseSepolia.id,
-    verifyingContract: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as `0x${string}`, // USDC Sepolia
+    verifyingContract: reqs.asset as `0x${string}`,
   };
   const types = {
     TransferWithAuthorization: [
@@ -73,9 +75,12 @@ export async function makeSepoliaPayment(
   });
 
   const payload = {
-    x402Version: 1,
+    x402Version: 2,
     scheme: "exact",
-    network: reqs.network,
+    // The agent echoes back the chosen accepts[] entry under `accepted` —
+    // this is how the multi-rail paywall middleware (paywall.ts) selects
+    // which facilitator to dispatch to via accepted.network.
+    accepted: reqs,
     payload: {
       signature,
       authorization: {

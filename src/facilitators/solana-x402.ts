@@ -55,7 +55,9 @@ export class SolanaX402Facilitator implements Facilitator {
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly deps: SolanaX402Deps) {
-    this.fetchImpl = deps.fetchImpl ?? fetch;
+    // See note in coinbase-x402.ts: bind to globalThis to avoid CF Workers
+    // "Illegal invocation" when calling via this.fetchImpl(...).
+    this.fetchImpl = deps.fetchImpl ?? fetch.bind(globalThis);
     this.id = `x402-${deps.network}`;
     this.supportedNetworks = [deps.network];
   }

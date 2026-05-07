@@ -2,8 +2,8 @@
   {
     "id": "e2e-charge",
     "priority": 1,
-    "path_pattern": "/paid/*",
-    "agent_pattern": "signed:test-agent.local",
+    "path_pattern": "/anything/*",
+    "agent_pattern": "signed:*",
     "action": "charge",
     "price_usdc": "0.001",
     "enabled": true
