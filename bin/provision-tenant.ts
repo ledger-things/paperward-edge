@@ -16,11 +16,17 @@
 //   tsx bin/provision-tenant.ts \
 //     --hostname=blog.example.com \
 //     --origin=https://internal.example.com \
-//     --tenant-id=<uuid> \
 //     --payout-address=0x... \
+//     [--facilitator-id=coinbase-x402-base] \
+//     [--cname-target=cname.staging.paperward.com] \
+//     [--tenant-id=<uuid>] \
 //     [--status=active|log_only|paused_by_publisher|suspended_by_paperward] \
 //     [--default-action=allow|block] \
 //     [--rules-file=path/to/rules.json]
+//
+// For multi-rail tenants (Base + Solana), provision with one rail and PUT
+// the tenant later with the full accepted_facilitators[] array. Multi-rail
+// CLI args are deferred until we have a real publisher who needs both.
 
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -29,6 +35,8 @@ type Args = {
   hostname: string;
   origin: string;
   payout_address: string;
+  facilitator_id: string;
+  cname_target: string;
   tenant_id?: string;
   status?: "active" | "log_only" | "paused_by_publisher" | "suspended_by_paperward";
   default_action?: "allow" | "block";
@@ -68,6 +76,8 @@ function parseArgs(): Args {
     hostname: out.hostname!,
     origin: out.origin!,
     payout_address: out.payout_address!,
+    facilitator_id: out.facilitator_id ?? "coinbase-x402-base",
+    cname_target: out.cname_target ?? "cname.staging.paperward.com",
     ...(out.tenant_id !== undefined ? { tenant_id: out.tenant_id } : {}),
     ...(status !== undefined ? { status } : {}),
     ...(default_action !== undefined ? { default_action } : {}),
@@ -95,8 +105,12 @@ async function postAdminTenant(args: Args): Promise<{ tenant_id: string }> {
     origin: args.origin,
     status: args.status ?? "active",
     default_action: args.default_action ?? "allow",
-    facilitator_id: "coinbase-x402-base",
-    payout_address: args.payout_address,
+    accepted_facilitators: [
+      {
+        facilitator_id: args.facilitator_id,
+        payout_address: args.payout_address,
+      },
+    ],
     pricing_rules: rules,
   };
   const r = await fetch(`${adminBase}/__admin/tenants`, {
@@ -111,9 +125,16 @@ async function postAdminTenant(args: Args): Promise<{ tenant_id: string }> {
   return { tenant_id };
 }
 
-async function registerCustomHostname(hostname: string): Promise<{
-  ssl_validation: { type: string; status: string; txt_name?: string; txt_value?: string };
-}> {
+type CfValidationRecord = { txt_name?: string; txt_value?: string };
+type CfOwnershipVerification = { name?: string; type?: string; value?: string };
+type CfCustomHostnameResult = {
+  id: string;
+  hostname: string;
+  ssl?: { status: string; validation_records?: CfValidationRecord[] };
+  ownership_verification?: CfOwnershipVerification;
+};
+
+async function registerCustomHostname(hostname: string): Promise<CfCustomHostnameResult> {
   const cfToken = requireEnv("CF_API_TOKEN");
   const zoneId = requireEnv("CF_ZONE_ID");
   const r = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/custom_hostnames`, {
@@ -128,7 +149,7 @@ async function registerCustomHostname(hostname: string): Promise<{
     console.error(`CF custom hostnames POST failed: ${r.status} ${await r.text()}`);
     process.exit(1);
   }
-  const body = (await r.json()) as any;
+  const body = (await r.json()) as { result: CfCustomHostnameResult };
   return body.result;
 }
 
@@ -146,17 +167,32 @@ async function main() {
   console.log("──────────────────────────────────────────────");
   console.log("Send these instructions to the publisher:");
   console.log("──────────────────────────────────────────────");
-  console.log(`1. Add this DNS TXT record to ${args.hostname}'s DNS:`);
-  if (result.ssl_validation.txt_name && result.ssl_validation.txt_value) {
-    console.log(`   name:  ${result.ssl_validation.txt_name}`);
-    console.log(`   value: ${result.ssl_validation.txt_value}`);
-  } else {
-    console.log("   (Cloudflare did not return TXT validation values; check the dashboard)");
+
+  // Hostname ownership verification (proves domain control to Cloudflare).
+  const ov = result.ownership_verification;
+  if (ov?.name && ov?.value) {
+    console.log(`1. Add this DNS TXT record to ${args.hostname}'s DNS (hostname ownership):`);
+    console.log(`   name:  ${ov.name}`);
+    console.log(`   type:  ${ov.type ?? "TXT"}`);
+    console.log(`   value: ${ov.value}`);
+    console.log("");
   }
-  console.log("");
-  console.log(`2. Once Cloudflare reports validation success, change the DNS record for`);
+
+  // SSL DV — TXT record(s) for cert issuance.
+  const sslRecords = result.ssl?.validation_records ?? [];
+  if (sslRecords.length > 0 && sslRecords[0]?.txt_name && sslRecords[0]?.txt_value) {
+    console.log(`2. Add this DNS TXT record (TLS cert validation):`);
+    console.log(`   name:  ${sslRecords[0].txt_name}`);
+    console.log(`   value: ${sslRecords[0].txt_value}`);
+    console.log("");
+  } else {
+    console.log("2. (No TLS validation records returned yet — re-query the API in 30s.)");
+    console.log("");
+  }
+
+  console.log(`3. Once Cloudflare reports validation success, change the DNS record for`);
   console.log(`   ${args.hostname} to point at the Paperward edge:`);
-  console.log(`   ${args.hostname}  CNAME  paperward-edge.workers.dev`);
+  console.log(`   ${args.hostname}  CNAME  ${args.cname_target}`);
   console.log(``);
   console.log(`Check status:`);
   console.log(`   curl -H "Authorization: Bearer $CF_API_TOKEN" \\`);

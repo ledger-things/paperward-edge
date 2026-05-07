@@ -129,7 +129,7 @@ app.all("*", async (c) => {
 // plain classes are only valid for legacy KV-backed DOs). Class shape will
 // be filled in when the rate-limiting feature is built.
 export class RateLimiterDO extends DurableObject<Env> {
-  async fetch(_req: Request): Promise<Response> {
+  override async fetch(_req: Request): Promise<Response> {
     return new Response("rate limiter not implemented in v0", { status: 501 });
   }
 }

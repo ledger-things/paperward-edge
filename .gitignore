@@ -11,3 +11,4 @@ coverage/
 .vscode/
 .idea/
 worker-configuration.d.ts
+tmp/
