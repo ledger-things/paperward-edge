@@ -9,6 +9,9 @@
 //   E2E_SEPOLIA_PRIVATE_KEY — agent's Sepolia wallet private key (USDC payer)
 //   E2E_TEST_AGENT_KEY      — Ed25519 private key bytes for WBA signing
 //                              (defaults to test/fixtures/wba/keys.ts)
+//   E2E_AGENT_OPERATOR      — hostname of the standalone JWKS Worker that
+//                              hosts the agent's public-key directory.
+//                              Defaults to the staging fixture Worker.
 
 import { signRequest } from "../fixtures/wba/sign";
 
@@ -17,6 +20,11 @@ if (!HOST) {
   console.error("E2E_HOSTNAME required");
   process.exit(2);
 }
+
+const AGENT_OPERATOR =
+  process.env.E2E_AGENT_OPERATOR ??
+  "paperward-agent-jwks-staging.billowing-thunder-3549.workers.dev";
+const SIG_AGENT = `https://${AGENT_OPERATOR}`;
 
 // The full suite needs a funded Sepolia wallet to make real x402 payments.
 // In CI, the secret may not be set yet (intentionally — the wallet costs real
@@ -48,7 +56,7 @@ await expect("browser request returns 200", async () => {
 });
 
 await expect("signed request without payment returns 402 with x402 headers", async () => {
-  const req = await signRequest({ url: `https://${HOST}/paid/article-1` });
+  const req = await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT });
   const r = await fetch(req);
   if (r.status !== 402) throw new Error(`expected 402, got ${r.status}`);
   const auth = r.headers.get("WWW-Authenticate") ?? "";
@@ -61,7 +69,7 @@ await expect("signed request without payment returns 402 with x402 headers", asy
 
 await expect("signed request with valid Sepolia x402 payment returns 200", async () => {
   // 1. First call to get the payment requirements
-  const probe = await fetch(await signRequest({ url: `https://${HOST}/paid/article-1` }));
+  const probe = await fetch(await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }));
   const reqs = ((await probe.json()) as any).accepts[0];
   // 2. Build a Sepolia x402 payment payload using viem (or whatever the
   //    x402 client library exposes). This is a multi-line block — see the
@@ -72,6 +80,7 @@ await expect("signed request with valid Sepolia x402 payment returns 200", async
   // 3. Re-issue the request with the X-PAYMENT header
   const signed = await signRequest({
     url: `https://${HOST}/paid/article-1`,
+    signatureAgent: SIG_AGENT,
     additionalHeaders: { "x-payment": xPayment },
   });
   const r = await fetch(signed);
@@ -81,7 +90,7 @@ await expect("signed request with valid Sepolia x402 payment returns 200", async
 });
 
 await expect("signed request with wrong amount returns 402 charge_verify_failed", async () => {
-  const probe = await fetch(await signRequest({ url: `https://${HOST}/paid/article-1` }));
+  const probe = await fetch(await signRequest({ url: `https://${HOST}/paid/article-1`, signatureAgent: SIG_AGENT }));
   const reqs = ((await probe.json()) as any).accepts[0];
   const { makeSepoliaPayment } = await import("./sepolia-payment");
   // Pay 1 wei — way too low
@@ -91,6 +100,7 @@ await expect("signed request with wrong amount returns 402 charge_verify_failed"
   );
   const signed = await signRequest({
     url: `https://${HOST}/paid/article-1`,
+    signatureAgent: SIG_AGENT,
     additionalHeaders: { "x-payment": xPayment },
   });
   const r = await fetch(signed);

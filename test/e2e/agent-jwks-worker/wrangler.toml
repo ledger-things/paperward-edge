@@ -1,0 +1,8 @@
+name = "paperward-agent-jwks-staging"
+main = "index.ts"
+compatibility_date = "2026-05-01"
+
+# No Custom Domain — exposed only via the workers.dev URL so the main
+# Worker can fetch from it without triggering CF's Worker self-loop guard
+# (a separate script is treated as an external origin).
+workers_dev = true

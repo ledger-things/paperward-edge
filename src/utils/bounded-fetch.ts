@@ -89,5 +89,16 @@ export async function boundedFetch(
     buffered.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return { ok: true, body: new Response(buffered, { status: resp.status, headers: resp.headers }) };
+  // The Workers runtime already decompressed the body when we read via the
+  // streaming reader, so the bytes in `buffered` are plain. Strip any
+  // content-encoding / content-length from the headers we preserve, otherwise
+  // when callers read .text() the runtime would try to decompress again
+  // (br/gzip) and fail with a parse error on already-decoded bytes.
+  const cleanedHeaders = new Headers(resp.headers);
+  cleanedHeaders.delete("content-encoding");
+  cleanedHeaders.delete("content-length");
+  return {
+    ok: true,
+    body: new Response(buffered, { status: resp.status, headers: cleanedHeaders }),
+  };
 }
