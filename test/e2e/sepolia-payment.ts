@@ -31,7 +31,11 @@ export async function makeSepoliaPayment(
   reqs: X402AcceptsEntry,
   privateKeyHex: string,
 ): Promise<string> {
-  const account = privateKeyToAccount(privateKeyHex as `0x${string}`);
+  // Tolerate keys with or without the 0x prefix (GitHub Secrets often strip
+  // surrounding context; users sometimes paste the bare 64-hex string).
+  const trimmed = privateKeyHex.trim();
+  const normalized = (trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`) as `0x${string}`;
+  const account = privateKeyToAccount(normalized);
   const client = createWalletClient({ chain: baseSepolia, transport: http(), account });
 
   const validAfter = 0n;
