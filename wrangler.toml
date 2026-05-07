@@ -96,6 +96,19 @@ ENV = "staging"
 ADMIN_HOSTNAME = "admin.staging.paperward.com"
 HEALTH_HOSTNAME = "health.staging.paperward.com"
 
+# Wildcard route on the paperward.com zone. This is the canonical pattern for
+# Cloudflare for SaaS + Workers integration: SaaS-forwarded traffic preserves
+# the inbound Host header (e.g. test-blog.ltmd.it), which means neither a
+# Workers Custom Domain on cname.staging.paperward.com nor a route pattern
+# scoped to that hostname matches the forwarded traffic — both bindings match
+# on Host. Only `*/*` catches every URL in the zone regardless of Host.
+# More-specific Custom Domains (admin/health/test-blog/e2e-test) take
+# precedence over `*/*` and continue routing as before. Confirmed by Cloudflare
+# support 2026-05-07.
+[[env.staging.routes]]
+pattern = "*/*"
+zone_name = "paperward.com"
+
 [[env.staging.kv_namespaces]]
 binding = "KV_DOMAINS"
 id = "5ad4c3b4a4ad4a6fab601cd954e8553d"
