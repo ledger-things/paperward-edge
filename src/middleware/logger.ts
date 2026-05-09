@@ -7,11 +7,13 @@
 
 import type { MiddlewareHandler } from "hono";
 import { ulid } from "ulid";
-import type { Env, Vars } from "@/types";
-import type { LogEntry } from "@/logging/types";
 import { writeLogToR2 } from "@/logging/r2-writer";
+import type { LogEntry } from "@/logging/types";
 import { Metrics } from "@/metrics/analytics-engine";
 import { getSentry } from "@/observability/sentry";
+import type { Env, Vars } from "@/types";
+import type { BotEventV1 } from "@/types/paperward-events";
+import { shortHash } from "@/utils/hash";
 
 export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Variables: Vars }> {
   return async (c, next) => {
@@ -33,8 +35,20 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
     const url = new URL(c.req.url);
     const path = url.pathname; // query stripped per spec §6.5
 
-    const cf = (c.req.raw as any).cf as { colo?: string } | undefined;
+    const cf = (c.req.raw as any).cf as { colo?: string; country?: string } | undefined;
     const rayId = c.req.header("cf-ray") ?? `${cf?.colo ?? "unknown"}:unknown`;
+
+    // Hash User-Agent and CF-Connecting-IP in parallel — both are SHA-256
+    // truncated to 16 hex chars by `shortHash`. Each is `undefined` when the
+    // corresponding header is missing, in which case we omit the field.
+    const [uaHash, ipHash] = await Promise.all([
+      shortHash(c.req.header("user-agent")),
+      shortHash(c.req.header("cf-connecting-ip")),
+    ]);
+
+    const country = cf?.country;
+    const rail = c.var.rail;
+    const facilitator_status = c.var.facilitator_status;
 
     const entry: LogEntry = {
       id,
@@ -56,6 +70,13 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
       payment_tx: ds.payment_tx,
       origin_status: c.var.origin_status,
       latency_ms: Date.now() - start,
+      // Optional enrichment — spread conditionally so we don't write
+      // explicit `undefined` under exactOptionalPropertyTypes.
+      ...(rail !== undefined ? { rail } : {}),
+      ...(country !== undefined ? { country } : {}),
+      ...(uaHash !== undefined ? { ua_hash: uaHash } : {}),
+      ...(ipHash !== undefined ? { ip_hash: ipHash } : {}),
+      ...(facilitator_status !== undefined ? { facilitator_status } : {}),
     };
 
     // ANALYTICS may be absent in environments where the binding is not
@@ -83,7 +104,74 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
         capturedSentry?.captureException(err);
       }),
     );
+
+    // Optional: emit BotEventV1 to the Paperward control-plane Queue when
+    // PAPERWARD_EVENTS is bound. Omitting the binding disables the feature;
+    // OSS forks without the binding are unaffected.
+    if (c.env.PAPERWARD_EVENTS) {
+      const event: BotEventV1 = {
+        v: 1,
+        event_id: entry.id,
+        ts: entry.ts,
+        hostname: entry.hostname,
+        agent_id: entry.agent_id,
+        agent_name: agentNameFromId(entry.agent_id),
+        signed: entry.agent_signed,
+        path: entry.path,
+        decision: entry.decision,
+        // Structured price/payment per the canonical BotEventV1 shape.
+        // Emitted only when all required sub-fields are present so the
+        // control plane can rely on them being well-formed when set.
+        ...(entry.price_usdc && entry.rail
+          ? {
+              price: {
+                amount: entry.price_usdc,
+                currency: "USDC" as const,
+                rail: entry.rail,
+              },
+            }
+          : {}),
+        ...(entry.payment_tx && entry.facilitator_status
+          ? {
+              payment: {
+                tx_id: entry.payment_tx,
+                facilitator_status: entry.facilitator_status,
+              },
+            }
+          : {}),
+        client: {
+          ...(entry.country !== undefined ? { country: entry.country } : {}),
+          ...(entry.ua_hash !== undefined ? { ua_hash: entry.ua_hash } : {}),
+          ...(entry.ip_hash !== undefined ? { ip_hash: entry.ip_hash } : {}),
+        },
+      };
+      c.executionCtx.waitUntil(
+        c.env.PAPERWARD_EVENTS.send(event).catch((err) => {
+          // Never fail the request because of the analytics emit.
+          console.error(
+            JSON.stringify({
+              at: "logger",
+              event: "paperward_events_send_failed",
+              err: String(err),
+            }),
+          );
+        }),
+      );
+    }
   };
+}
+
+/**
+ * Derives the human-readable agent name from `agent_id` for BotEventV1.
+ *   "signed:gptbot"  → "gptbot"
+ *   "unsigned:claude" → "claude"
+ *   "human"           → "human"
+ *   null              → "unknown"
+ */
+function agentNameFromId(agent_id: string | null): string {
+  if (agent_id === null) return "unknown";
+  const colon = agent_id.indexOf(":");
+  return colon === -1 ? agent_id : agent_id.slice(colon + 1);
 }
 
 function classifyAgentId(agent_id: string): string {
