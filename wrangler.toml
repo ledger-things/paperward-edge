@@ -45,6 +45,12 @@ new_sqlite_classes = ["RateLimiterDO"]
 # (Adding it later, when the producer call site and consumer
 # Worker ship together, per spec §11.1.)
 
+# Optional: emit per-decision events to the Paperward control-plane Queue.
+# Leaving this commented disables the feature; OSS forks can ignore it.
+# [[queues.producers]]
+# binding = "PAPERWARD_EVENTS"
+# queue = "paperward-events"
+
 # ─────────────────────────────────────────────────────────────
 # dev environment — `wrangler dev --env dev`
 # ─────────────────────────────────────────────────────────────
@@ -132,3 +138,9 @@ dataset = "paperward_edge_staging"
 [[env.staging.durable_objects.bindings]]
 name = "RATE_LIMITER"
 class_name = "RateLimiterDO"
+
+# Optional: emit per-decision events to the Paperward control-plane Queue.
+# Leaving this commented disables the feature; OSS forks can ignore it.
+# [[env.staging.queues.producers]]
+# binding = "PAPERWARD_EVENTS"
+# queue = "paperward-events-staging"
