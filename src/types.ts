@@ -33,6 +33,8 @@ export type Env = {
   R2_LOGS: R2Bucket;
   ANALYTICS: AnalyticsEngineDataset;
   RATE_LIMITER: DurableObjectNamespace;
+  /** Optional: when bound, every decision is enqueued as BotEventV1 for ingestion. OSS forks without the binding are unaffected. */
+  PAPERWARD_EVENTS?: Queue<unknown>;
 };
 
 export type DecisionState = {
@@ -53,4 +55,8 @@ export type Vars = {
   decision_state: DecisionState;
   origin_status: number | null;
   sentry: SentryLike; // per-request Sentry instance (set by logger middleware)
+  /** Set by paywall middleware once a facilitator is selected — short rail name for BotEventV1.price.rail. */
+  rail?: "base" | "solana";
+  /** Set by paywall middleware after settle completes (successfully or otherwise) — facilitator-reported status string for BotEventV1.payment.facilitator_status. */
+  facilitator_status?: string;
 };

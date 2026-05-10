@@ -39,4 +39,15 @@ export type LogEntry = {
   payment_tx: string | null;
   origin_status: number | null;
   latency_ms: number;
+  // ── BotEventV1 enrichment (optional; populated when available) ──
+  /** Short rail name when a facilitator was selected (set by paywall middleware). */
+  rail?: "base" | "solana";
+  /** ISO 3166 country code from `request.cf.country`. */
+  country?: string;
+  /** First 16 hex chars of SHA-256(User-Agent). */
+  ua_hash?: string;
+  /** First 16 hex chars of SHA-256(CF-Connecting-IP). */
+  ip_hash?: string;
+  /** Facilitator-reported status string after settle (success or failure reason). */
+  facilitator_status?: string;
 };

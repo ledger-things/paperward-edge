@@ -13,7 +13,8 @@
 // `unsupported_network` when an agent pays on a rail the tenant didn't accept.
 
 import type { MiddlewareHandler } from "hono";
-import type { Env, Vars } from "@/types";
+import type { AcceptedFacilitator } from "@/config/types";
+import { decodePaymentHeader } from "@/facilitators/coinbase-x402";
 import type {
   Facilitator,
   PaymentRequirements,
@@ -21,9 +22,8 @@ import type {
   VerifyResult,
 } from "@/facilitators/types";
 import { networkFromX402 } from "@/facilitators/types";
-import type { AcceptedFacilitator } from "@/config/types";
 import { Metrics } from "@/metrics/analytics-engine";
-import { decodePaymentHeader } from "@/facilitators/coinbase-x402";
+import type { Env, Vars } from "@/types";
 
 export function buildPaywallMiddleware(
   getRegistry: (env: Env) => Map<string, Facilitator>,
@@ -126,12 +126,18 @@ export function buildPaywallMiddleware(
 
     const { facilitator, accepted: matchedAccepted } = match;
     const facilitator_id = facilitator.id;
+    const facilitatorNetwork = facilitator.supportedNetworks[0]!; // a facilitator instance is bound to one network
+    // Surface the rail to the logger middleware so it can populate
+    // BotEventV1.price.rail. Set as soon as the facilitator is known —
+    // even if verify/settle fail later, we still want to record which rail
+    // the inbound payment claimed.
+    c.set("rail", railFromNetwork(facilitatorNetwork));
 
     const requirements: PaymentRequirements = {
       amount_usdc: ds.price_usdc!,
       recipient: matchedAccepted.payout_address,
       resource: c.req.url,
-      network: facilitator.supportedNetworks[0]!, // a facilitator instance is bound to one network
+      network: facilitatorNetwork,
     };
 
     let verifyResult: VerifyResult;
@@ -208,6 +214,7 @@ export function buildPaywallMiddleware(
       console.error(JSON.stringify({ at: "paywall", event: "settle_threw", err: String(err) }));
       c.var.sentry?.captureException(err);
       metrics?.settleFailure({ facilitator_id, reason: "settle_threw" });
+      c.set("facilitator_status", "settle_threw");
       c.set("decision_state", {
         ...updated,
         decision: "charge_unsettled",
@@ -220,6 +227,7 @@ export function buildPaywallMiddleware(
       const reason = settleResult.reason ?? "settle_failed";
       metrics?.settleFailure({ facilitator_id, reason });
       c.var.sentry?.captureException(new Error(`settle failed: ${reason}`));
+      c.set("facilitator_status", reason);
       c.set("decision_state", {
         ...updated,
         decision: "charge_unsettled",
@@ -228,6 +236,7 @@ export function buildPaywallMiddleware(
       return;
     }
 
+    c.set("facilitator_status", "success");
     c.set("decision_state", {
       ...updated,
       decision: "charge_paid",
@@ -324,6 +333,14 @@ function readNetworkFromPaymentPayload(decoded: unknown): string | null {
   if (!accepted || typeof accepted !== "object") return null;
   const network = (accepted as Record<string, unknown>).network;
   return typeof network === "string" ? network : null;
+}
+
+/**
+ * Collapses an internal Network identifier (`base-mainnet` / `solana-devnet` /
+ * etc.) to the short rail label used in BotEventV1.price.rail.
+ */
+function railFromNetwork(network: import("@/facilitators/types").Network): "base" | "solana" {
+  return network.startsWith("solana") ? "solana" : "base";
 }
 
 /**
