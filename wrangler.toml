@@ -141,6 +141,6 @@ class_name = "RateLimiterDO"
 
 # Optional: emit per-decision events to the Paperward control-plane Queue.
 # Leaving this commented disables the feature; OSS forks can ignore it.
-# [[env.staging.queues.producers]]
-# binding = "PAPERWARD_EVENTS"
-# queue = "paperward-events-staging"
+[[env.staging.queues.producers]]
+binding = "PAPERWARD_EVENTS"
+queue = "paperward-events-staging"
