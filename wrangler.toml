@@ -108,9 +108,9 @@ HEALTH_HOSTNAME = "health.staging.paperward.com"
 # Workers Custom Domain on cname.staging.paperward.com nor a route pattern
 # scoped to that hostname matches the forwarded traffic — both bindings match
 # on Host. Only `*/*` catches every URL in the zone regardless of Host.
-# More-specific Custom Domains (admin/health/test-blog/e2e-test) take
-# precedence over `*/*` and continue routing as before. Confirmed by Cloudflare
-# support 2026-05-07.
+# More-specific Custom Domains (admin/health/e2e-test) take precedence over
+# `*/*` and continue routing as before. Confirmed by Cloudflare support
+# 2026-05-07.
 [[env.staging.routes]]
 pattern = "*/*"
 zone_name = "paperward.com"
