@@ -153,6 +153,19 @@ The script writes the tenant config via the admin endpoint, registers the hostna
 
 You can run your own Paperward edge against your own Cloudflare account. See [`docs/setup.md`](./docs/setup.md) for the full runbook (KV namespaces, R2 buckets, Analytics Engine datasets, secrets, Custom Hostnames). Production cutover checklist at [`docs/production-cutover.md`](./docs/production-cutover.md).
 
+### Optional bindings
+
+#### Citation referrals (optional)
+
+When the worker binding `PAPERWARD_REFERRALS` is configured, the edge detects
+requests carrying a `Referer` header from a known LLM host (ChatGPT,
+Perplexity, Claude, Gemini) and emits a `CitationReferralV1` event to that
+queue. The Paperward control plane uses this signal to show which assistants
+are sending the publisher traffic.
+
+The binding is **optional**. OSS forks without it silently skip the emit —
+detection logic still runs, but no event is sent. Source: `src/utils/llm-referers.ts`.
+
 ## Repository layout
 
 ```
