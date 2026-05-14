@@ -47,3 +47,27 @@ export interface BotEventV1 {
     ip_hash?: string;
   };
 }
+
+/**
+ * Mirror of `@paperward/shared` CitationReferralV1Schema.
+ *
+ * Edge emits this alongside BotEventV1 whenever the request carries an LLM
+ * referer host on the allowlist (see src/utils/llm-referers.ts).
+ *
+ * Source of truth: paperward/packages/shared/src/events.ts
+ */
+export interface CitationReferralV1 {
+  v: 1;
+  event_id: string;
+  ts: string;
+  hostname: string;
+  landing_path: string;
+  landing_url: string;
+  referrer_host: string;
+  assistant: 'perplexity' | 'openai' | 'anthropic' | 'google' | 'other';
+  client: {
+    country?: string;
+    ua_hash: string;
+    ip_hash: string;
+  };
+}

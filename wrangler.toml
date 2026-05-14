@@ -51,6 +51,12 @@ new_sqlite_classes = ["RateLimiterDO"]
 # binding = "PAPERWARD_EVENTS"
 # queue = "paperward-events"
 
+# Optional: emit citation referral events to the Paperward control-plane Queue.
+# Leaving this commented disables the feature; OSS forks can ignore it.
+# [[queues.producers]]
+# binding = "PAPERWARD_REFERRALS"
+# queue = "paperward-citation-referrals"
+
 # ─────────────────────────────────────────────────────────────
 # dev environment — `wrangler dev --env dev`
 # ─────────────────────────────────────────────────────────────
@@ -144,3 +150,9 @@ class_name = "RateLimiterDO"
 [[env.staging.queues.producers]]
 binding = "PAPERWARD_EVENTS"
 queue = "paperward-events-staging"
+
+# Optional: emit citation referral events to the Paperward control-plane Queue.
+# Leaving this commented disables the feature; OSS forks can ignore it.
+[[env.staging.queues.producers]]
+binding = "PAPERWARD_REFERRALS"
+queue = "paperward-citation-referrals-staging"
