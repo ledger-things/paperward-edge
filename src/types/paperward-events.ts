@@ -64,7 +64,7 @@ export interface CitationReferralV1 {
   landing_path: string;
   landing_url: string;
   referrer_host: string;
-  assistant: 'perplexity' | 'openai' | 'anthropic' | 'google' | 'other';
+  assistant: "perplexity" | "openai" | "anthropic" | "google" | "other";
   client: {
     country?: string;
     ua_hash: string;

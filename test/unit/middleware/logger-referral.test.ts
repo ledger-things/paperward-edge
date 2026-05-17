@@ -113,7 +113,7 @@ describe("loggerMiddleware — CitationReferralV1 emit", () => {
     expect(typeof referral.event_id).toBe("string");
     expect(typeof referral.ts).toBe("string");
     expect(typeof referral.landing_url).toBe("string");
-    expect((referral.landing_url as string)).toContain("/article");
+    expect(referral.landing_url as string).toContain("/article");
     const client = referral.client as Record<string, unknown>;
     expect(typeof client.ua_hash).toBe("string");
     expect(typeof client.ip_hash).toBe("string");
