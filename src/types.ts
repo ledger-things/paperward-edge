@@ -35,6 +35,8 @@ export type Env = {
   RATE_LIMITER: DurableObjectNamespace;
   /** Optional: when bound, every decision is enqueued as BotEventV1 for ingestion. OSS forks without the binding are unaffected. */
   PAPERWARD_EVENTS?: Queue<unknown>;
+  /** Optional: when bound, LLM-host referrals are enqueued as CitationReferralV1 for ingestion. OSS forks without the binding are unaffected. */
+  PAPERWARD_REFERRALS?: Queue<unknown>;
 };
 
 export type DecisionState = {

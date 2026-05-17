@@ -12,8 +12,9 @@ import type { LogEntry } from "@/logging/types";
 import { Metrics } from "@/metrics/analytics-engine";
 import { getSentry } from "@/observability/sentry";
 import type { Env, Vars } from "@/types";
-import type { BotEventV1 } from "@/types/paperward-events";
+import type { BotEventV1, CitationReferralV1 } from "@/types/paperward-events";
 import { shortHash } from "@/utils/hash";
+import { classifyLlmReferer } from "@/utils/llm-referers";
 
 export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Variables: Vars }> {
   return async (c, next) => {
@@ -157,6 +158,43 @@ export function buildLoggerMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
           );
         }),
       );
+    }
+
+    // Citation referrals — fire when a known LLM-host referer is present.
+    // Independent of BotEventV1 emit: the request may also be a bot fetch, but
+    // human click-throughs from chat.openai.com / perplexity.ai / claude.ai /
+    // gemini.google.com are the canonical referral signal (Layer 2).
+    if (c.env.PAPERWARD_REFERRALS) {
+      const referer = c.req.header("referer");
+      const referrerInfo = referer ? classifyLlmReferer(referer) : null;
+      if (referrerInfo) {
+        const referral: CitationReferralV1 = {
+          v: 1,
+          event_id: entry.id,
+          ts: entry.ts,
+          hostname: entry.hostname,
+          landing_path: entry.path,
+          landing_url: c.req.url,
+          referrer_host: referrerInfo.host,
+          assistant: referrerInfo.assistant,
+          client: {
+            ...(entry.country !== undefined ? { country: entry.country } : {}),
+            ua_hash: entry.ua_hash ?? "",
+            ip_hash: entry.ip_hash ?? "",
+          },
+        };
+        c.executionCtx.waitUntil(
+          c.env.PAPERWARD_REFERRALS.send(referral).catch((err) => {
+            console.error(
+              JSON.stringify({
+                at: "logger",
+                event: "paperward_referrals_send_failed",
+                err: String(err),
+              }),
+            );
+          }),
+        );
+      }
     }
   };
 }
